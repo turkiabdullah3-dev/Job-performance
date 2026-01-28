@@ -1,0 +1,400 @@
+
+// HR Analytics Dashboard - Complete Script
+// Session variables
+let sessionToken = null;
+let currentFileId = null;
+let rawData = null;
+
+// Show loading screen
+function showLoading(text) {
+    const screen = document.getElementById('loadingScreen');
+    const textEl = document.getElementById('loadingText');
+    if (screen) {
+        screen.classList.add('active');
+        if (textEl) textEl.textContent = text || 'جاري المعالجة...';
+    }
+}
+
+// Hide loading screen
+function hideLoading() {
+    const screen = document.getElementById('loadingScreen');
+    if (screen) screen.classList.remove('active');
+}
+
+// Show error message
+function showError(message) {
+    const banner = document.getElementById('errorBanner');
+    if (banner) {
+        banner.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+        banner.classList.add('visible');
+        setTimeout(function() {
+            banner.classList.remove('visible');
+        }, 6000);
+    }
+    hideLoading();
+}
+
+// Update progress bar
+function updateProgress(percent, status) {
+    const bar = document.getElementById('progressBar');
+    const percentEl = document.getElementById('progressPercent');
+    const statusEl = document.getElementById('progressStatus');
+    
+    if (bar) bar.style.width = percent + '%';
+    if (percentEl) percentEl.textContent = percent + '%';
+    if (statusEl) statusEl.textContent = status || 'جاري المعالجة...';
+}
+
+// Initialize session
+async function initSession() {
+    try {
+        showLoading('جاري تهيئة الجلسة...');
+        const response = await fetch('/init-session');
+        if (response.ok) {
+            const data = await response.json();
+            sessionToken = data.session_token;
+            hideLoading();
+        } else {
+            hideLoading();
+            showError('تعذر إنشاء الجلسة');
+        }
+    } catch (e) {
+        console.warn('Server not available');
+        hideLoading();
+    }
+}
+
+// Upload file
+async function uploadFile(file) {
+    if (!sessionToken) {
+        showError('جلسة غير صالحة');
+        return;
+    }
+    
+    showLoading('جاري رفع الملف...');
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) progressContainer.classList.add('active');
+    updateProgress(0, 'جاري الرفع...');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Session-Token': sessionToken }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                currentFileId = data.file_id;
+                showLoading('جاري تحليل البيانات...');
+                updateProgress(50, 'جاري التحليل...');
+                loadAnalytics(data.sheets[0]);
+            } else {
+                showError(data.error || 'فشل الرفع');
+            }
+        } else {
+            showError('فشل الاتصال بالخادم');
+        }
+    } catch (e) {
+        showError('خطأ: ' + e.message);
+    }
+}
+
+// Load analytics data
+async function loadAnalytics(sheet) {
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    async function tryLoad() {
+        try {
+            const response = await fetch('/analytics', {
+                method: 'POST',
+                headers: {
+                    'X-Session-Token': sessionToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ file_id: currentFileId, sheet: sheet })
+            });
+            
+            if (response.status === 202) {
+                attempts++;
+                if (attempts < maxAttempts) {
+                    updateProgress(50 + (attempts * 2), 'جاري المعالجة...');
+                    setTimeout(tryLoad, 1000);
+                } else {
+                    showError('انتهت مهلة المعالجة');
+                }
+            } else if (response.ok) {
+                updateProgress(100, 'اكتمل!');
+                const data = await response.json();
+                renderDashboard(data);
+                setTimeout(function() {
+                    const progressContainer = document.getElementById('progressContainer');
+                    if (progressContainer) progressContainer.classList.remove('active');
+                }, 1000);
+            } else {
+                showError('فشل تحميل البيانات');
+            }
+        } catch (e) {
+            showError('خطأ: ' + e.message);
+        }
+    }
+    
+    tryLoad();
+}
+
+// Render dashboard
+function renderDashboard(data) {
+    rawData = data;
+    
+    // Show sections
+    document.getElementById('statsSection').style.display = 'grid';
+    document.getElementById('chartsSection').style.display = 'block';
+    if (data.regional_data && Object.keys(data.regional_data).length > 0) {
+        document.getElementById('mapSection').style.display = 'block';
+        renderMap(data.regional_data);
+    }
+    
+    // Update stats
+    document.getElementById('totalRecords').textContent = data.total_records.toLocaleString();
+    document.getElementById('validRatings').textContent = data.valid_ratings.toLocaleString();
+    document.getElementById('avgRating').textContent = data.avg_rating.toFixed(2);
+    
+    // Render charts
+    if (data.top_departments && data.top_departments.length > 0) {
+        renderDepartmentsChart(data.top_departments);
+        renderRatingsChart(data.top_departments);
+        renderEmployeesChart(data.top_departments);
+        renderPerformanceChart(data.top_departments);
+    }
+}
+
+// Render departments chart
+function renderDepartmentsChart(depts) {
+    const ctx = document.getElementById('departmentsChart');
+    if (!ctx) return;
+    
+    if (window.deptChart) window.deptChart.destroy();
+    
+    window.deptChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: depts.map(d => d.name),
+            datasets: [{
+                label: 'التقييم',
+                data: depts.map(d => d.rating),
+                backgroundColor: 'rgba(46, 125, 50, 0.8)',
+                borderColor: '#2e7d32',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { beginAtZero: true, max: 5, grid: { color: 'rgba(0,0,0,0.05)' } },
+                y: { grid: { display: false } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+// Render ratings distribution chart
+function renderRatingsChart(depts) {
+    const ctx = document.getElementById('ratingsDistribution');
+    if (!ctx) return;
+    
+    const buckets = { 'ممتاز': 0, 'جيد جداً': 0, 'جيد': 0, 'مقبول': 0, 'ضعيف': 0 };
+    depts.forEach(function(d) {
+        if (d.rating >= 5) buckets['ممتاز'] += d.employees;
+        else if (d.rating >= 4) buckets['جيد جداً'] += d.employees;
+        else if (d.rating >= 3) buckets['جيد'] += d.employees;
+        else if (d.rating >= 2) buckets['مقبول'] += d.employees;
+        else buckets['ضعيف'] += d.employees;
+    });
+    
+    if (window.ratingsChart) window.ratingsChart.destroy();
+    
+    window.ratingsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(buckets),
+            datasets: [{
+                data: Object.values(buckets),
+                backgroundColor: ['#2e7d32', '#43a047', '#ffc107', '#ff9800', '#e53935']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+}
+
+// Render employees chart
+function renderEmployeesChart(depts) {
+    const ctx = document.getElementById('employeesChart');
+    if (!ctx) return;
+    
+    if (window.empChart) window.empChart.destroy();
+    
+    window.empChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: depts.map(d => d.name),
+            datasets: [{
+                label: 'الموظفين',
+                data: depts.map(d => d.employees),
+                backgroundColor: 'rgba(76, 175, 80, 0.8)',
+                borderColor: '#4caf50',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                x: { ticks: { maxRotation: 45 } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+// Render performance comparison chart
+function renderPerformanceChart(depts) {
+    const ctx = document.getElementById('performanceChart');
+    if (!ctx) return;
+    
+    if (window.perfChart) window.perfChart.destroy();
+    
+    window.perfChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'الأقسام',
+                data: depts.map(d => ({ x: d.employees, y: d.rating })),
+                backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                borderColor: '#ffc107',
+                pointRadius: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: 'الموظفين' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                y: { title: { display: true, text: 'التقييم' }, beginAtZero: true, max: 5, grid: { color: 'rgba(0,0,0,0.05)' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+// Render regional map
+function renderRegionalMap(regions) {
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) return;
+    
+    if (window.regionalMap) {
+        window.regionalMap.remove();
+    }
+    
+    window.regionalMap = L.map('map').setView([24, 45], 5);
+    
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(window.regionalMap);
+    
+    function getColor(rating) {
+        if (rating >= 4.5) return '#2e7d32';
+        if (rating >= 4) return '#43a047';
+        if (rating >= 3) return '#ffc107';
+        return '#e53935';
+    }
+    
+    window.regionMarkers = [];
+    
+    for (var region in regions) {
+        var data = regions[region];
+        var color = getColor(data.avg_rating);
+        var size = Math.max(30, Math.min(data.avg_rating * 10, 50));
+        
+        var icon = L.divIcon({
+            className: 'region-marker',
+            html: '<div style="width:' + size + 'px;height:' + size + 'px;background:' + color + ';border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:' + (size * 0.3) + 'px;font-weight:bold;color:white;">' + data.avg_rating.toFixed(1) + '</div>',
+            iconSize: [size, size],
+            iconAnchor: [size/2, size/2]
+        });
+        
+        var marker = L.marker([data.lat, data.lng], { icon: icon });
+        var status = data.avg_rating >= 4.5 ? 'ممتاز' : data.avg_rating >= 4 ? 'جيد جداً' : data.avg_rating >= 3 ? 'متوسط' : 'ضعيف';
+        
+        marker.bindPopup('<div style="text-align:center;min-width:150px;"><strong>' + region + '</strong><br/><span style="font-size:24px;color:' + color + ';">' + data.avg_rating.toFixed(1) + '</span><br/>تقييم<br/><strong>' + data.employees + '</strong> موظف<br/><span style="background:' + color + ';color:white;padding:3px 10px;border-radius:10px;">' + status + '</span></div>');
+        
+        marker.addTo(window.regionalMap);
+        window.regionMarkers.push(marker);
+    }
+    
+    if (Object.keys(regions).length > 0) {
+        var bounds = L.latLngBounds(Object.keys(regions).map(function(r) { return [regions[r].lat, regions[r].lng]; }));
+        window.regionalMap.fitBounds(bounds, { padding: [50, 50] });
+    }
+}
+
+// Clear all data
+async function clearData() {
+    try {
+        await fetch('/clear', {
+            method: 'POST',
+            headers: { 'X-Session-Token': sessionToken }
+        });
+    } catch (e) {}
+    
+    currentFileId = null;
+    rawData = null;
+    document.getElementById('excelFile').value = '';
+    document.getElementById('statsSection').style.display = 'none';
+    document.getElementById('chartsSection').style.display = 'none';
+    document.getElementById('mapSection').style.display = 'none';
+    document.getElementById('totalRecords').textContent = '-';
+    document.getElementById('validRatings').textContent = '-';
+    document.getElementById('avgRating').textContent = '-';
+    
+    ['deptChart', 'ratingsChart', 'empChart', 'perfChart'].forEach(function(chart) {
+        if (window[chart]) {
+            window[chart].destroy();
+            window[chart] = null;
+        }
+    });
+    
+    if (window.regionalMap) {
+        window.regionalMap.remove();
+        window.regionalMap = null;
+    }
+    
+    showError('✓ تم مسح البيانات');
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    initSession();
+    
+    document.getElementById('excelFile').addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (file) {
+            uploadFile(file);
+        }
+    });
+    
+    document.getElementById('clearBtn').addEventListener('click', clearData);
+});
+

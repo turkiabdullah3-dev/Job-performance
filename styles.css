@@ -1,0 +1,460 @@
+/* ============================================================
+   Ministry of Education - KSA
+   Performance Management Department
+   Official Styling
+   ============================================================ */
+
+/* Map Popup Styles */
+.leaflet-popup-content-wrapper {
+    background: rgba(255, 255, 255, 0.98) !important;
+    backdrop-filter: blur(15px);
+    border-radius: 14px !important;
+    box-shadow: 0 10px 40px rgba(0, 133, 93, 0.2) !important;
+    border: 1px solid rgba(0, 133, 93, 0.15) !important;
+    padding: 0 !important;
+}
+
+.leaflet-popup-content {
+    margin: 14px !important;
+}
+
+.leaflet-popup-tip {
+    background: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Regional Marker */
+.regional-marker-container {
+    transition: transform 0.3s ease;
+}
+
+.regional-marker {
+    transition: all 0.3s ease;
+}
+
+.regional-marker:hover {
+    transform: scale(1.2);
+    z-index: 1000;
+}
+
+/* Map Legend */
+.map-legend {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 133, 93, 0.2);
+    box-shadow: 0 8px 30px rgba(0, 133, 93, 0.15);
+}
+
+.legend-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.legend-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #00855D;
+    margin-bottom: 5px;
+    font-family: 'Cairo', sans-serif;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: #1B4D3E;
+    font-family: 'Cairo', sans-serif;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.legend-dot.excellent { 
+    background: #00855D; 
+    box-shadow: 0 0 8px rgba(0, 133, 93, 0.5);
+}
+
+.legend-dot.good { 
+    background: #00A87D; 
+}
+
+.legend-dot.average { 
+    background: #B8860B; 
+}
+
+.legend-dot.poor { 
+    background: #C75146; 
+}
+
+/* Popup Container */
+.popup-container {
+    font-family: 'Cairo', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-width: 240px;
+    max-width: 300px;
+    padding: 5px;
+}
+
+.popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(0, 133, 93, 0.15);
+}
+
+.popup-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #00855D;
+    font-family: 'Cairo', sans-serif;
+}
+
+.popup-status {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #00855D;
+    background: rgba(0, 133, 93, 0.1);
+    border: 1px solid rgba(0, 133, 93, 0.2);
+}
+
+.popup-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.popup-stat {
+    text-align: center;
+    padding: 8px 5px;
+    background: linear-gradient(135deg, rgba(0, 133, 93, 0.05) 0%, rgba(0, 133, 93, 0.1) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 133, 93, 0.15);
+}
+
+.popup-stat-value {
+    font-size: 16px;
+    font-weight: 800;
+    color: #00855D;
+    font-family: 'Cairo', sans-serif;
+}
+
+.popup-stat-label {
+    font-size: 8px;
+    color: #4A5D56;
+    margin-top: 2px;
+    font-family: 'Cairo', sans-serif;
+}
+
+.popup-dept-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0, 133, 93, 0.15);
+}
+
+.popup-dept-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #1B4D3E;
+    margin-bottom: 8px;
+    font-family: 'Cairo', sans-serif;
+}
+
+.popup-dept-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 8px;
+    margin: 4px 0;
+    background: rgba(0, 133, 93, 0.03);
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.popup-dept-item:hover {
+    background: rgba(0, 133, 93, 0.08);
+}
+
+.popup-dept-name {
+    font-size: 10px;
+    color: #1B4D3E;
+    font-family: 'Cairo', sans-serif;
+}
+
+.popup-dept-rating {
+    font-size: 10px;
+    font-weight: 800;
+    color: #00855D;
+    font-family: 'Cairo', sans-serif;
+}
+
+/* Responsive Map */
+@media (max-width: 768px) {
+    #map {
+        height: 300px !important;
+    }
+    
+    .popup-container {
+        min-width: 200px;
+        max-width: 260px;
+    }
+    
+    .map-legend {
+        padding: 10px;
+    }
+}
+
+/* ============================================================
+   UI Component Enhancements
+   ============================================================ */
+
+/* Smooth transitions */
+.glass-card,
+.btn,
+.upload-card,
+.stat-card,
+.chart-box,
+.section-card,
+.header-btn {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbar - Ministry Theme */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 133, 93, 0.05);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #00855D 0%, #1B4D3E 100%);
+    border-radius: 5px;
+    border: 2px solid rgba(0, 133, 93, 0.1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #006B4A 0%, #0D3A2D 100%);
+}
+
+/* Select multiple styling */
+select[multiple] {
+    cursor: pointer;
+    min-height: 45px;
+}
+
+select[multiple] option {
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin: 2px 5px;
+}
+
+select[multiple] option:checked {
+    background: linear-gradient(90deg, #00855D, #1B4D3E);
+    color: white;
+}
+
+/* Number input styling */
+input[type="number"] {
+    text-align: center;
+    font-family: 'Cairo', sans-serif;
+}
+
+/* Focus states */
+.btn:focus-visible,
+.filter-group select:focus-visible,
+.filter-group input:focus-visible {
+    box-shadow: 0 0 0 3px rgba(0, 133, 93, 0.2);
+}
+
+/* Chart container hover effects */
+.chart-box:hover {
+    border-color: #00855D;
+}
+
+/* Animation for stats values */
+@keyframes countUp {
+    from { 
+        opacity: 0; 
+        transform: translateY(15px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+.stat-card .value {
+    animation: countUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Staggered animation for stat cards */
+.stat-card:nth-child(1) .value { animation-delay: 0.1s; }
+.stat-card:nth-child(2) .value { animation-delay: 0.2s; }
+.stat-card:nth-child(3) .value { animation-delay: 0.3s; }
+
+/* Toast animations */
+@keyframes toastIn {
+    from { transform: translateX(100px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toastOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100px); opacity: 0; }
+}
+
+#error-banner.visible {
+    animation: toastIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Loading shimmer effect */
+.loading-bar-fill {
+    position: relative;
+    overflow: hidden;
+}
+
+.loading-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.4) 50%,
+        transparent 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+/* Page load animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.container > * {
+    animation: fadeInUp 0.5s ease forwards;
+}
+
+.container > *:nth-child(1) { animation-delay: 0.05s; }
+.container > *:nth-child(2) { animation-delay: 0.1s; }
+.container > *:nth-child(3) { animation-delay: 0.15s; }
+.container > *:nth-child(4) { animation-delay: 0.2s; }
+.container > *:nth-child(5) { animation-delay: 0.25s; }
+.container > *:nth-child(6) { animation-delay: 0.3s; }
+
+/* Tooltip styles */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-5px);
+    padding: 6px 12px;
+    background: #1B4D3E;
+    color: white;
+    font-size: 11px;
+    font-family: 'Cairo', sans-serif;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-8px);
+}
+
+/* Card hover glow effect */
+.stat-card::after,
+.section-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.stat-card:hover::after,
+.section-card:hover::after {
+    opacity: 1;
+    box-shadow: 0 0 30px rgba(0, 133, 93, 0.15);
+}
+
+/* Print styles */
+@media print {
+    .header,
+    .upload-card,
+    .filter-actions,
+    .footer {
+        background: #1B4D3E !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .stat-card,
+    .section-card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    :root {
+        --moe-green: #006B4A;
+        --moe-dark: #0D3A2D;
+        --border-light: #333;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

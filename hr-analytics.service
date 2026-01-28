@@ -1,0 +1,41 @@
+[Unit]
+Description=HR Analytics System - Ministry of Education
+Documentation=https://analysis.turki20.sa
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hr-analytics
+ExecStart=/usr/bin/python3 /var/www/hr-analytics/production_server.py \
+    --host 127.0.0.1 \
+    --port 8080 \
+    --workers 2
+
+Restart=always
+RestartSec=10
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=80%
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=append:/var/log/hr-analytics/app.log
+StandardError=append:/var/log/hr-analytics/error.log
+
+# Environment
+Environment=PYTHONPATH=/var/www/hr-analytics
+Environment=FLASK_ENV=production
+
+# Security hardening
+ProtectSystem=strict
+ReadWritePaths=/var/log/hr-analytics /var/www/hr-analytics
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
