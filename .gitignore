@@ -48,6 +48,10 @@ logs/
 .env
 .env.local
 
+# Documentation/Explanation files (ChatGPT)
+*.md
+!README.md
+
 # Temporary files
 *.tmp
 temp/
