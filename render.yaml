@@ -8,10 +8,14 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: PYTHONHASHSEED
+        value: random
       - key: FLASK_ENV
         value: production
       - key: ALLOWED_ORIGINS
         value: https://turki20.sa,https://www.turki20.sa
       - key: PIP_DEFAULT_TIMEOUT
         value: 100
+      - key: PIP_DISABLE_PIP_VERSION_CHECK
+        value: 1
     healthCheckPath: /init-session
