@@ -12,7 +12,7 @@ let serverAvailable = true;
 // للإنتاج على turki20.sa: يتصل بـ Backend على Render
 const API_BASE = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' 
     ? 'http://127.0.0.1:8080' 
-    : 'https://YOUR-RENDER-APP-NAME.onrender.com'; // ضع هنا رابط Render بعد النشر
+    : 'https://job-performance.onrender.com'; // Render Backend
 
 // Loading screen
 function showLoadingScreen(text, subtext) {
