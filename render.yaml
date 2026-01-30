@@ -3,8 +3,8 @@ services:
     name: hr-analytics-backend
     env: python
     runtime: python-3.13.4
-    buildCommand: pip install --upgrade pip setuptools wheel && pip install --only-binary=:all: -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.4
