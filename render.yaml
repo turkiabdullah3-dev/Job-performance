@@ -2,12 +2,12 @@ services:
   - type: web
     name: hr-analytics-backend
     env: python
-    runtime: python-3.11.9
-    buildCommand: python -V && pip install --upgrade pip setuptools wheel && pip install --only-binary=:all: -r requirements.txt
+    runtime: python-3.13.4
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install --only-binary=:all: -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
+        value: 3.13.4
       - key: PYTHONHASHSEED
         value: random
       - key: FLASK_ENV

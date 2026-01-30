@@ -946,9 +946,7 @@ if __name__ == '__main__':
     print("   • CORS protection")
     print("   • Enhanced region detection with fuzzy matching")
     print("=" * 50)
-    print(f"🌐 Server: http://0.0.0.0:{PORT}")
+    print(f"🌐 Server listening on port {PORT}")
     print("=" * 50 + "\n")
-    
-    app.run(debug=False, host='0.0.0.0', port=PORT, threaded=True)
 
 
