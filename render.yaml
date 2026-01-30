@@ -21,3 +21,5 @@ services:
       - key: PIP_ONLY_BINARY
         value: :all:
     healthCheckPath: /init-session
+    # Force rebuild with improved stability
+
