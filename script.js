@@ -1,4 +1,4 @@
-// Initialize Session
+// Initialize
 let sessionToken = null;
 let currentFileId = null;
 let currentSheetName = 'Sheet1';
@@ -9,6 +9,24 @@ let currentData = null;
 const API_BASE = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' 
     ? 'http://127.0.0.1:8080' 
     : 'https://job-performance.onrender.com';
+
+// ============= Local Storage Management =============
+
+function saveToken(token) {
+    localStorage.setItem('sessionToken', token);
+}
+
+function getToken() {
+    return localStorage.getItem('sessionToken');
+}
+
+function clearToken() {
+    localStorage.removeItem('sessionToken');
+}
+
+function isLoggedIn() {
+    return !!getToken();
+}
 
 // ============= UI Functions =============
 
@@ -44,29 +62,243 @@ function showError(message, timeout) {
     } catch (e) { console.error('UI error:', e); }
 }
 
-// ============= Session Management =============
+// ============= Page Navigation =============
 
-async function initSession() {
-    showLoadingScreen('جاري تهيئة الجلسة...', 'يرجى الانتظار');
+function showLoginPage() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    
+    app.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #00855D 0%, #006B4A 50%, #1B4D3E 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        ">
+            <div style="
+                background: white;
+                border-radius: 20px;
+                padding: 50px 40px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            ">
+                <div style="text-align: center; margin-bottom: 40px;">
+                    <i class="fas fa-lock" style="font-size: 50px; color: #00855D; margin-bottom: 15px;"></i>
+                    <h1 style="color: #1B4D3E; margin: 0; font-size: 28px;">تسجيل الدخول</h1>
+                    <p style="color: #4A5D56; margin: 10px 0 0 0;">نظام تحليل الأداء الوظيفي</p>
+                </div>
+                
+                <form id="login-form" style="display: flex; flex-direction: column; gap: 20px;">
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #1B4D3E;">
+                            <i class="fas fa-user"></i> اسم المستخدم
+                        </label>
+                        <input type="text" id="username-input" placeholder="أدخل اسم المستخدم" style="
+                            width: 100%;
+                            padding: 12px;
+                            border: 2px solid #D4E5DD;
+                            border-radius: 10px;
+                            font-family: 'Cairo', sans-serif;
+                            font-size: 14px;
+                        " autocomplete="username" required>
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #1B4D3E;">
+                            <i class="fas fa-key"></i> كلمة المرور
+                        </label>
+                        <input type="password" id="password-input" placeholder="أدخل كلمة المرور" style="
+                            width: 100%;
+                            padding: 12px;
+                            border: 2px solid #D4E5DD;
+                            border-radius: 10px;
+                            font-family: 'Cairo', sans-serif;
+                            font-size: 14px;
+                        " autocomplete="current-password" required>
+                    </div>
+                    
+                    <button type="submit" style="
+                        padding: 14px;
+                        background: #00855D;
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-family: 'Cairo', sans-serif;
+                        font-weight: 600;
+                        font-size: 15px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    " onmouseover="this.style.background='#006B4A'" onmouseout="this.style.background='#00855D'">
+                        <i class="fas fa-sign-in-alt"></i> دخول
+                    </button>
+                </form>
+                
+                <p style="color: #4A5D56; font-size: 12px; text-align: center; margin-top: 20px;">
+                    <i class="fas fa-shield-alt"></i> هذا النظام محمي بكلمات مرور آمنة
+                </p>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+}
+
+function showDashboard() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    
+    app.innerHTML = `
+        <!-- Loading Screen -->
+        <div id="loadingScreen">
+            <div class="loading-spinner"></div>
+            <div id="loadingText">جاري المعالجة...</div>
+            <div id="loadingSubtext">يرجى الانتظار</div>
+        </div>
+        
+        <!-- Error Banner -->
+        <div id="error-banner"></div>
+        
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <i class="fas fa-chart-bar"></i>
+                    <div>
+                        <h1>نظام تحليل الأداء الوظيفي</h1>
+                        <p>وزارة التعليم - المملكة العربية السعودية</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <span id="username-display" style="color: white; margin-right: 15px;"></span>
+                    <button class="btn btn-secondary" id="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i> خروج
+                    </button>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Container -->
+        <div class="container">
+            <!-- Upload Section -->
+            <div class="upload-section" onclick="document.getElementById('excel-file').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h2>رفع ملف Excel</h2>
+                <p>اضغط أو اسحب ملف Excel للبدء في التحليل</p>
+                <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" />
+            </div>
+            
+            <!-- Chart Container -->
+            <div class="chart-container" id="chartContainer-wrapper">
+                <div class="chart-header">
+                    <i class="fas fa-chart-line"></i>
+                    <h2>التحليل الديناميكي</h2>
+                </div>
+                <div id="chartContainer"></div>
+                <div id="chartControls" class="chart-controls"></div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>© 2026 منظومة إدارة الأداء الوظيفي - جميع الحقوق محفوظة</p>
+        </div>
+    `;
+    
+    // Add event listeners
+    document.getElementById('excel-file').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleFileUpload(file);
+    });
+    
+    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    
+    // Update username display
+    checkAuthStatus();
+}
+
+// ============= Authentication =============
+
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const username = document.getElementById('username-input').value.trim();
+    const password = document.getElementById('password-input').value.trim();
+    
+    if (!username || !password) {
+        showError('❌ يرجى إدخال اسم المستخدم وكلمة المرور');
+        return;
+    }
+    
+    showLoadingScreen('جاري التحقق...', 'يرجى الانتظار');
+    
     try {
-        const response = await fetch(`${API_BASE}/init-session`, { 
-            method: 'GET', 
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
+            body: JSON.stringify({ username, password })
         });
         
+        const data = await response.json();
+        
         if (!response.ok) {
-            throw new Error('Session init failed');
+            hideLoadingScreen();
+            showError(`❌ ${data.error || 'فشل تسجيل الدخول'}`);
+            return;
         }
         
-        const data = await response.json();
         sessionToken = data.session_token;
+        saveToken(sessionToken);
+        
         hideLoadingScreen();
-        console.log('✓ Session initialized');
+        showDashboard();
+        
     } catch (error) {
-        console.error('Session init error:', error);
         hideLoadingScreen();
-        showError('❌ فشل الاتصال بالخادم. تأكد من تشغيل الخادم.');
+        showError(`❌ خطأ في الاتصال: ${error.message}`);
+    }
+}
+
+async function handleLogout() {
+    showLoadingScreen('جاري تسجيل الخروج...', 'يرجى الانتظار');
+    
+    try {
+        await fetch(`${API_BASE}/logout`, {
+            method: 'POST',
+            headers: { 'X-Session-Token': sessionToken }
+        });
+    } catch (e) {
+        console.log('Logout request failed, clearing local token');
+    }
+    
+    sessionToken = null;
+    clearToken();
+    hideLoadingScreen();
+    showLoginPage();
+}
+
+async function checkAuthStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/auth-check`, {
+            method: 'GET',
+            headers: { 'X-Session-Token': sessionToken }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const usernameDisplay = document.getElementById('username-display');
+            if (usernameDisplay) {
+                usernameDisplay.textContent = `مرحباً ${data.username} 👋`;
+            }
+        }
+    } catch (e) {
+        console.error('Auth check failed:', e);
     }
 }
 
@@ -74,7 +306,7 @@ async function initSession() {
 
 async function handleFileUpload(file) {
     if (!sessionToken) {
-        showError('❌ الجلسة غير نشطة');
+        showError('❌ لم تقم بتسجيل الدخول');
         return;
     }
     
@@ -111,10 +343,9 @@ async function handleFileUpload(file) {
     }
 }
 
-// ============= Dynamic Chart Builder Modal =============
+// ============= Chart Builder Modal =============
 
 function showChartBuilderModal(columns) {
-    // Remove old modal
     const existingModal = document.getElementById('chart-builder-modal');
     if (existingModal) existingModal.remove();
     
@@ -154,7 +385,6 @@ function showChartBuilderModal(columns) {
         </div>
         
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
-            <!-- X Axis Column -->
             <div>
                 <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
                     <i class="fas fa-arrows-alt-h"></i> المحور الأفقي (X):
@@ -173,7 +403,6 @@ function showChartBuilderModal(columns) {
                 </select>
             </div>
             
-            <!-- Y Axis Column -->
             <div>
                 <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
                     <i class="fas fa-arrows-alt-v"></i> المحور العمودي (Y):
@@ -193,7 +422,6 @@ function showChartBuilderModal(columns) {
             </div>
         </div>
         
-        <!-- Group By Column (Optional) -->
         <div style="margin-bottom: 25px;">
             <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
                 <i class="fas fa-layer-group"></i> تجميع حسب (اختياري):
@@ -212,7 +440,6 @@ function showChartBuilderModal(columns) {
             </select>
         </div>
         
-        <!-- Chart Type -->
         <div style="margin-bottom: 25px;">
             <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
                 <i class="fas fa-palette"></i> نوع الرسم البياني:
@@ -237,7 +464,6 @@ function showChartBuilderModal(columns) {
             </div>
         </div>
         
-        <!-- Aggregation Function -->
         <div style="margin-bottom: 30px;">
             <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
                 <i class="fas fa-calculator"></i> طريقة التجميع:
@@ -259,7 +485,6 @@ function showChartBuilderModal(columns) {
             </select>
         </div>
         
-        <!-- Buttons -->
         <div style="display: flex; gap: 10px; justify-content: center;">
             <button id="cancel-chart-builder-btn" style="
                 padding: 14px 28px;
@@ -271,8 +496,7 @@ function showChartBuilderModal(columns) {
                 font-weight: 600;
                 font-size: 15px;
                 cursor: pointer;
-                transition: all 0.3s;
-            " onmouseover="this.style.background='#D4E5DD'" onmouseout="this.style.background='#E8F5E9'">
+            ">
                 <i class="fas fa-times"></i> إلغاء
             </button>
             <button id="create-chart-btn" style="
@@ -285,8 +509,7 @@ function showChartBuilderModal(columns) {
                 font-weight: 600;
                 font-size: 15px;
                 cursor: pointer;
-                transition: all 0.3s;
-            " onmouseover="this.style.background='#006642'" onmouseout="this.style.background='#00855D'">
+            ">
                 <i class="fas fa-chart-line"></i> إنشاء الرسم البياني
             </button>
         </div>
@@ -295,7 +518,6 @@ function showChartBuilderModal(columns) {
     modal.appendChild(content);
     document.body.appendChild(modal);
     
-    // Event Listeners
     document.getElementById('cancel-chart-builder-btn').onclick = () => {
         modal.remove();
         currentFileId = null;
@@ -351,7 +573,6 @@ async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
         
         hideLoadingScreen();
         renderDynamicChart(data, chartType);
-        showChartControls(xCol, yCol, groupBy, chartType, aggregation);
         
     } catch (error) {
         console.error('Analysis error:', error);
@@ -364,207 +585,50 @@ async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
 
 function renderDynamicChart(data, chartType) {
     const container = document.getElementById('chartContainer');
-    if (!container) {
-        console.error('Chart container not found');
-        return;
-    }
+    if (!container) return;
     
-    // Remove old canvas
     container.innerHTML = '<canvas id="dynamicChart" style="width: 100%; height: 400px;"></canvas>';
     
     const ctx = document.getElementById('dynamicChart').getContext('2d');
     
-    // Destroy previous chart
     if (window.dynamicChart) window.dynamicChart.destroy();
     
     const chartConfig = {
         bar: {
             type: 'bar',
-            data: {
-                labels: data.labels,
-                datasets: data.datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: data.datasets.length > 1 ? 'y' : undefined,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(0,0,0,0.05)' }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                },
-                plugins: { legend: { display: data.datasets.length > 1 } }
-            }
+            data: { labels: data.labels, datasets: data.datasets },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
         },
-        
         line: {
             type: 'line',
-            data: {
-                labels: data.labels,
-                datasets: data.datasets.map(ds => ({
-                    ...ds,
-                    borderColor: ds.backgroundColor,
-                    backgroundColor: 'transparent',
-                    tension: 0.3,
-                    borderWidth: 3
-                }))
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(0,0,0,0.05)' }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                },
-                plugins: { legend: { display: data.datasets.length > 1 } }
-            }
+            data: { labels: data.labels, datasets: data.datasets.map(ds => ({...ds, borderColor: ds.backgroundColor, backgroundColor: 'transparent', tension: 0.3, borderWidth: 3})) },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
         },
-        
         pie: {
             type: 'doughnut',
-            data: {
-                labels: data.labels,
-                datasets: [{
-                    data: data.datasets[0].data,
-                    backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0', '#3f51b5', '#00bcd4'],
-                    borderColor: '#fff',
-                    borderWidth: 3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
+            data: { labels: data.labels, datasets: [{data: data.datasets[0].data, backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'], borderColor: '#fff', borderWidth: 3}] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
         },
-        
         scatter: {
             type: 'scatter',
-            data: {
-                datasets: [{
-                    label: data.y_column,
-                    data: data.datasets[0].data.map((y, i) => ({ x: i, y: y })),
-                    backgroundColor: 'rgba(0, 133, 93, 0.8)',
-                    borderColor: '#00855D',
-                    borderWidth: 2,
-                    pointRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true },
-                    x: { display: false }
-                },
-                plugins: { legend: { display: false } }
-            }
+            data: { datasets: [{label: data.y_column, data: data.datasets[0].data.map((y, i) => ({ x: i, y: y })), backgroundColor: 'rgba(0, 133, 93, 0.8)', borderColor: '#00855D', borderWidth: 2, pointRadius: 8}] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true }, x: { display: false } } }
         }
     };
     
     window.dynamicChart = new Chart(ctx, chartConfig[chartType]);
 }
 
-function showChartControls(xCol, yCol, groupBy, chartType, aggregation) {
-    const controlsDiv = document.getElementById('chartControls');
-    if (!controlsDiv) return;
-    
-    controlsDiv.style.display = 'block';
-    controlsDiv.innerHTML = `
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; padding: 20px; background: #f5f5f5; border-radius: 10px;">
-            <button onclick="exportChartAsImage()" style="
-                padding: 10px 20px;
-                background: #00855D;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-family: 'Cairo', sans-serif;
-                cursor: pointer;
-            ">
-                <i class="fas fa-download"></i> تحميل الرسم
-            </button>
-            <button onclick="exportChartData()" style="
-                padding: 10px 20px;
-                background: #43a047;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-family: 'Cairo', sans-serif;
-                cursor: pointer;
-            ">
-                <i class="fas fa-file-excel"></i> تحميل البيانات
-            </button>
-            <button id="new-chart-btn" style="
-                padding: 10px 20px;
-                background: #ffc107;
-                color: #333;
-                border: none;
-                border-radius: 8px;
-                font-family: 'Cairo', sans-serif;
-                cursor: pointer;
-            ">
-                <i class="fas fa-plus"></i> رسم جديد
-            </button>
-        </div>
-    `;
-    
-    document.getElementById('new-chart-btn').onclick = () => {
-        document.getElementById('excel-file').value = '';
-        document.getElementById('chartContainer').innerHTML = '';
-        document.getElementById('chartControls').style.display = 'none';
-    };
-}
-
-// ============= Export Functions =============
-
-function exportChartAsImage() {
-    if (!window.dynamicChart) return;
-    const link = document.createElement('a');
-    link.href = window.dynamicChart.canvas.toDataURL('image/png');
-    link.download = 'chart.png';
-    link.click();
-}
-
-function exportChartData() {
-    if (!currentData) return;
-    
-    const csv = [
-        ['العمود الأفقي', 'القيمة', ...(currentData.groupBy ? ['التجميع'] : [])].join(','),
-        ...currentData.labels.map((label, i) => {
-            const value = currentData.datasets[0].data[i] || 0;
-            const groupValue = currentData.groupBy ? (currentData.datasets[0].label || '') : '';
-            return [label, value, groupValue].join(',');
-        })
-    ].join('\n');
-    
-    const link = document.createElement('a');
-    link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    link.download = 'chart-data.csv';
-    link.click();
-}
-
 // ============= Initialize =============
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('✓ HR Analytics v2 loaded');
-    initSession();
+    console.log('✓ HR Analytics v3 (Secured) loaded');
     
-    const fileInput = document.getElementById('excel-file');
-    if (fileInput) {
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handleFileUpload(file);
-        });
+    if (isLoggedIn()) {
+        sessionToken = getToken();
+        showDashboard();
+        checkAuthStatus();
+    } else {
+        showLoginPage();
     }
 });

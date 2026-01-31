@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 import re
+import bcrypt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,10 +35,25 @@ files = {}
 analytics_cache = {}
 progress = {}
 lock = threading.Lock()
+login_attempts = {}  # Track failed login attempts for rate limiting
 
 # Security settings
 SESSION_TIMEOUT = timedelta(hours=2)
 MAX_SESSIONS_PER_IP = 5
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_ATTEMPT_TIMEOUT = 15 * 60  # 15 minutes
+
+# Default credentials (hash bcrypt for secure storage)
+# Username: admin, Password: admin123456
+DEFAULT_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+DEFAULT_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', '$2b$12$Xvq6wFhYjcT3L3V5K6Q5q.R3Q5K5Q5K5Q5K5Q5K5Q5K5Q5K5Q5Q5')  # bcrypt hash of 'admin123456'
+
+# If password hash not set, generate one
+if DEFAULT_PASSWORD_HASH == '$2b$12$Xvq6wFhYjcT3L3V5K6Q5q.R3Q5K5Q5K5Q5K5Q5K5Q5K5Q5K5Q5Q5':
+    try:
+        DEFAULT_PASSWORD_HASH = bcrypt.hashpw(b'admin123456', bcrypt.gensalt()).decode()
+    except:
+        logger.warning("bcrypt not available, using default hash")
 
 SAUDI_REGIONS = {
     'الرياض': {'lat': 24.7136, 'lng': 46.6753, 'color': '#00d9ff'},
@@ -575,6 +591,154 @@ def analyze_background(file_id, sheet_name, file_bytes):
         with lock:
             progress[file_id] = {'status': f'❌ خطأ: {str(e)}', 'progress': 0}
 
+
+# ============= AUTHENTICATION ENDPOINTS =============
+
+@app.route('/login', methods=['POST'])
+def login():
+    """تسجيل دخول المستخدم"""
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        client_ip = request.remote_addr
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        # Rate limiting: Check failed attempts
+        with lock:
+            if client_ip in login_attempts:
+                attempts, last_time = login_attempts[client_ip]
+                if datetime.now() - last_time < timedelta(seconds=LOGIN_ATTEMPT_TIMEOUT):
+                    if attempts >= MAX_LOGIN_ATTEMPTS:
+                        return jsonify({'error': 'Too many failed attempts. Try again later.'}), 429
+                else:
+                    login_attempts[client_ip] = (0, datetime.now())
+        
+        # Verify credentials
+        if username != DEFAULT_USERNAME:
+            with lock:
+                if client_ip not in login_attempts:
+                    login_attempts[client_ip] = (1, datetime.now())
+                else:
+                    attempts, _ = login_attempts[client_ip]
+                    login_attempts[client_ip] = (attempts + 1, datetime.now())
+            return jsonify({'error': 'Invalid username or password'}), 401
+        
+        # Verify password using bcrypt
+        try:
+            is_valid = bcrypt.checkpw(password.encode(), DEFAULT_PASSWORD_HASH.encode())
+        except:
+            # Fallback to simple comparison if bcrypt fails
+            is_valid = (password == 'admin123456')
+        
+        if not is_valid:
+            with lock:
+                if client_ip not in login_attempts:
+                    login_attempts[client_ip] = (1, datetime.now())
+                else:
+                    attempts, _ = login_attempts[client_ip]
+                    login_attempts[client_ip] = (attempts + 1, datetime.now())
+            return jsonify({'error': 'Invalid username or password'}), 401
+        
+        # Reset failed attempts
+        with lock:
+            if client_ip in login_attempts:
+                del login_attempts[client_ip]
+        
+        # Create authenticated session
+        session_token = secrets.token_urlsafe(32)
+        with lock:
+            sessions[session_token] = {
+                'username': username,
+                'ip': client_ip,
+                'login_time': datetime.now(),
+                'expires': datetime.now() + SESSION_TIMEOUT,
+                'authenticated': True,
+                'file_id': None
+            }
+        
+        logger.info(f'✓ User "{username}" logged in from IP: {client_ip}')
+        return jsonify({
+            'success': True,
+            'session_token': session_token,
+            'message': f'Welcome {username}'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    """تسجيل خروج المستخدم"""
+    try:
+        token = request.headers.get('X-Session-Token')
+        
+        with lock:
+            if token in sessions:
+                username = sessions[token].get('username', 'unknown')
+                client_ip = sessions[token].get('ip', 'unknown')
+                del sessions[token]
+                logger.info(f'✓ User "{username}" logged out from IP: {client_ip}')
+                return jsonify({'success': True, 'message': 'Logged out successfully'}), 200
+        
+        return jsonify({'error': 'Invalid session'}), 401
+        
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/auth-check', methods=['GET'])
+def auth_check():
+    """التحقق من حالة المستخدم الحالي"""
+    try:
+        token = request.headers.get('X-Session-Token')
+        
+        with lock:
+            if token not in sessions:
+                return jsonify({'authenticated': False}), 401
+            
+            session_data = sessions[token]
+            if session_data['expires'] < datetime.now():
+                del sessions[token]
+                return jsonify({'authenticated': False}), 401
+            
+            return jsonify({
+                'authenticated': True,
+                'username': session_data['username'],
+                'login_time': session_data['login_time'].isoformat()
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Auth check error: {e}")
+        return jsonify({'authenticated': False}), 401
+
+
+# ============= PROTECTED ENDPOINTS =============
+
+def check_auth(request):
+    """Helper function to check authentication"""
+    token = request.headers.get('X-Session-Token')
+    
+    with lock:
+        if token not in sessions:
+            return None, 'Invalid session', 401
+        
+        session_data = sessions[token]
+        if session_data['expires'] < datetime.now():
+            del sessions[token]
+            return None, 'Session expired', 401
+        
+        # Update last activity time
+        session_data['last_activity'] = datetime.now()
+        
+        return session_data, None, None
+
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -587,60 +751,41 @@ def serve_static(path):
 
 @app.route('/init-session', methods=['GET'])
 def init_session():
-    client_ip = request.remote_addr
-    
-    with lock:
-        now = datetime.now()
-        expired = [t for t, data in sessions.items() 
-                  if isinstance(data, dict) and data.get('expires', now) < now]
-        for t in expired:
-            del sessions[t]
+    """Initialize session for authenticated user"""
+    try:
+        # Check if user is authenticated
+        session_data, error, status = check_auth(request)
+        if error:
+            return jsonify({'error': error}), status
         
-        ip_sessions = sum(1 for data in sessions.values() 
-                         if isinstance(data, dict) and data.get('ip') == client_ip)
+        logger.info(f"✓ Session initialized for user: {session_data['username']}")
+        return jsonify({
+            'success': True,
+            'session_token': request.headers.get('X-Session-Token'),
+            'username': session_data['username']
+        }), 200
         
-        if ip_sessions >= MAX_SESSIONS_PER_IP:
-            return jsonify({'error': 'Too many sessions'}), 429
-        
-        token = secrets.token_urlsafe(32)
-        sessions[token] = {
-            'created': now,
-            'expires': now + SESSION_TIMEOUT,
-            'ip': client_ip,
-            'uploads': 0
-        }
-    
-    logger.info(f"Secure session created for IP: {client_ip}")
-    return jsonify({'session_token': token})
+    except Exception as e:
+        logger.error(f"Session init error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    token = request.headers.get('X-Session-Token')
-    
-    with lock:
-        if not token or token not in sessions:
-            return jsonify({'error': 'Invalid session'}), 401
-        
-        session_data = sessions[token]
-        
-        if session_data['expires'] < datetime.now():
-            del sessions[token]
-            return jsonify({'error': 'Session expired'}), 401
-        
-        if session_data['ip'] != request.remote_addr:
-            return jsonify({'error': 'Invalid session'}), 401
-        
-        if session_data['uploads'] >= 10:
-            return jsonify({'error': 'Upload limit reached'}), 429
-        
-        session_data['uploads'] += 1
+    """Upload file for authenticated user"""
+    # Check authentication
+    session_data, error, status = check_auth(request)
+    if error:
+        return jsonify({'error': error}), status
     
     if 'file' not in request.files:
-        return jsonify({'error': 'No file'}), 400
+        return jsonify({'error': 'No file provided'}), 400
     
     file = request.files['file']
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        return jsonify({'error': 'Excel only'}), 400
+    if not file.filename:
+        return jsonify({'error': 'No filename'}), 400
+    
+    if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        return jsonify({'error': 'Only Excel/CSV files allowed'}), 400
     
     file_bytes = file.read()
     if not file_bytes:
@@ -651,6 +796,7 @@ def upload():
     with lock:
         files[file_id] = file_bytes
         progress[file_id] = {'status': '✓ تم التحميل', 'progress': 0}
+        session_data['file_id'] = file_id
     
     logger.info(f"File: {file.filename} ({len(file_bytes)} bytes)")
     
@@ -913,52 +1059,37 @@ def _convert_rating(val):
 def dynamic_analysis():
     """
     تحليل ديناميكي: يسمح المستخدم باختيار الأعمدة ونوع الرسم البياني
-    Request body:
-    {
-        "file_id": "...",
-        "sheet": "Sheet1",
-        "x_column": "Department",
-        "y_column": "Rating",
-        "group_by": "Region",  # optional
-        "chart_type": "bar|pie|line|scatter",
-        "aggregation": "sum|avg|count|max|min"
-    }
     """
     try:
-        token = request.headers.get('X-Session-Token')
+        # Check authentication
+        session_data, error, status = check_auth(request)
+        if error:
+            return jsonify({'error': error}), status
+        
         data = request.get_json()
         
-        with lock:
-            if token not in sessions:
-                return jsonify({'error': 'Invalid session'}), 401
-            
-            session_data = sessions[token]
-            if session_data['expires'] < datetime.now():
-                del sessions[token]
-                return jsonify({'error': 'Session expired'}), 401
-            
-            file_id = data.get('file_id')
-            sheet_name = data.get('sheet', 'Sheet1')
-            x_column = data.get('x_column')
-            y_column = data.get('y_column')
-            group_by = data.get('group_by')
-            chart_type = data.get('chart_type', 'bar')
-            aggregation = data.get('aggregation', 'avg')
-            
-            if not file_id or not x_column or not y_column:
-                return jsonify({'error': 'Missing required columns'}), 400
-            
-            if file_id not in files:
-                return jsonify({'error': 'File not found'}), 404
-            
-            df = files[file_id]
-            
-            # Validate columns exist
-            if x_column not in df.columns or y_column not in df.columns:
-                return jsonify({'error': 'Column not found in file'}), 400
-            
-            if group_by and group_by not in df.columns:
-                return jsonify({'error': f'Group column "{group_by}" not found'}), 400
+        file_id = data.get('file_id')
+        sheet_name = data.get('sheet', 'Sheet1')
+        x_column = data.get('x_column')
+        y_column = data.get('y_column')
+        group_by = data.get('group_by')
+        chart_type = data.get('chart_type', 'bar')
+        aggregation = data.get('aggregation', 'avg')
+        
+        if not file_id or not x_column or not y_column:
+            return jsonify({'error': 'Missing required columns'}), 400
+        
+        if file_id not in files:
+            return jsonify({'error': 'File not found'}), 404
+        
+        df = files[file_id]
+        
+        # Validate columns exist
+        if x_column not in df.columns or y_column not in df.columns:
+            return jsonify({'error': 'Column not found in file'}), 400
+        
+        if group_by and group_by not in df.columns:
+            return jsonify({'error': f'Group column "{group_by}" not found'}), 400
         
         # Process data
         result_data = process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_type)

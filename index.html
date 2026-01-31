@@ -109,13 +109,6 @@
             display: none;
         }
         
-        /* Main Content Grid */
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
-        }
-        
         /* Chart Container */
         .chart-container {
             background: white;
@@ -198,15 +191,6 @@
         
         .btn-secondary:hover {
             background: #D4E5DD;
-        }
-        
-        .btn-warning {
-            background: #ffc107;
-            color: #333;
-        }
-        
-        .btn-warning:hover {
-            background: #ffb300;
         }
         
         /* Loading Screen */
@@ -326,61 +310,7 @@
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div id="loadingScreen">
-        <div class="loading-spinner"></div>
-        <div id="loadingText">جاري المعالجة...</div>
-        <div id="loadingSubtext">يرجى الانتظار</div>
-    </div>
-    
-    <!-- Error Banner -->
-    <div id="error-banner"></div>
-    
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <div class="header-title">
-                <i class="fas fa-chart-bar"></i>
-                <div>
-                    <h1>نظام تحليل الأداء الوظيفي</h1>
-                    <p>وزارة التعليم - المملكة العربية السعودية</p>
-                </div>
-            </div>
-            <div class="header-actions">
-                <button class="btn btn-secondary" id="clear-data">
-                    <i class="fas fa-trash-alt"></i> مسح البيانات
-                </button>
-            </div>
-        </div>
-    </header>
-    
-    <!-- Main Container -->
-    <div class="container">
-        <!-- Upload Section -->
-        <div class="upload-section" onclick="document.getElementById('excel-file').click()">
-            <i class="fas fa-cloud-upload-alt"></i>
-            <h2>رفع ملف Excel</h2>
-            <p>اضغط أو اسحب ملف Excel للبدء في التحليل</p>
-            <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" />
-        </div>
-        
-        <!-- Chart Container -->
-        <div class="chart-container" id="chartContainer-wrapper">
-            <div class="chart-header">
-                <i class="fas fa-chart-line"></i>
-                <h2>التحليل الديناميكي</h2>
-            </div>
-            <div id="chartContainer"></div>
-            <div id="chartControls" class="chart-controls"></div>
-        </div>
-    </div>
-    
-    <!-- Footer -->
-    <div class="footer">
-        <p>© 2026 منظومة إدارة الأداء الوظيفي - جميع الحقوق محفوظة</p>
-    </div>
-    
-    <!-- Scripts -->
-    <script src="script-new.js"></script>
+    <div id="app"></div>
+    <script src="script.js"></script>
 </body>
 </html>
