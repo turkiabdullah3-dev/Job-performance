@@ -909,6 +909,141 @@ def _convert_rating(val):
         return None
 
 
+@app.route('/dynamic-analysis', methods=['POST'])
+def dynamic_analysis():
+    """
+    تحليل ديناميكي: يسمح المستخدم باختيار الأعمدة ونوع الرسم البياني
+    Request body:
+    {
+        "file_id": "...",
+        "sheet": "Sheet1",
+        "x_column": "Department",
+        "y_column": "Rating",
+        "group_by": "Region",  # optional
+        "chart_type": "bar|pie|line|scatter",
+        "aggregation": "sum|avg|count|max|min"
+    }
+    """
+    try:
+        token = request.headers.get('X-Session-Token')
+        data = request.get_json()
+        
+        with lock:
+            if token not in sessions:
+                return jsonify({'error': 'Invalid session'}), 401
+            
+            session_data = sessions[token]
+            if session_data['expires'] < datetime.now():
+                del sessions[token]
+                return jsonify({'error': 'Session expired'}), 401
+            
+            file_id = data.get('file_id')
+            sheet_name = data.get('sheet', 'Sheet1')
+            x_column = data.get('x_column')
+            y_column = data.get('y_column')
+            group_by = data.get('group_by')
+            chart_type = data.get('chart_type', 'bar')
+            aggregation = data.get('aggregation', 'avg')
+            
+            if not file_id or not x_column or not y_column:
+                return jsonify({'error': 'Missing required columns'}), 400
+            
+            if file_id not in files:
+                return jsonify({'error': 'File not found'}), 404
+            
+            df = files[file_id]
+            
+            # Validate columns exist
+            if x_column not in df.columns or y_column not in df.columns:
+                return jsonify({'error': 'Column not found in file'}), 400
+            
+            if group_by and group_by not in df.columns:
+                return jsonify({'error': f'Group column "{group_by}" not found'}), 400
+        
+        # Process data
+        result_data = process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_type)
+        
+        logger.info(f"Dynamic analysis: {x_column} vs {y_column}, chart: {chart_type}")
+        return jsonify(result_data), 200
+        
+    except Exception as e:
+        logger.error(f"Dynamic analysis error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_type):
+    """معالجة البيانات للرسوم البيانية الديناميكية"""
+    
+    # Clean data
+    df_clean = df[[x_column, y_column] + ([group_by] if group_by else [])].dropna()
+    
+    # Convert y_column to numeric if possible
+    df_clean[y_column] = pd.to_numeric(df_clean[y_column], errors='coerce')
+    df_clean = df_clean.dropna(subset=[y_column])
+    
+    if len(df_clean) == 0:
+        return {'error': 'No valid data after cleaning', 'datasets': []}
+    
+    # Aggregate data
+    if group_by:
+        grouped = df_clean.groupby([x_column, group_by])[y_column]
+    else:
+        grouped = df_clean.groupby(x_column)[y_column]
+    
+    # Apply aggregation function
+    agg_func = {
+        'sum': 'sum',
+        'avg': 'mean',
+        'count': 'count',
+        'max': 'max',
+        'min': 'min'
+    }.get(aggregation, 'mean')
+    
+    aggregated = grouped.agg(agg_func).reset_index()
+    
+    if group_by:
+        # Multiple series for grouped data
+        result = {
+            'chart_type': chart_type,
+            'x_column': x_column,
+            'y_column': y_column,
+            'aggregation': aggregation,
+            'labels': sorted(aggregated[x_column].unique().tolist()),
+            'datasets': []
+        }
+        
+        for group_val in aggregated[group_by].unique():
+            subset = aggregated[aggregated[group_by] == group_val]
+            colors = ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0']
+            color = colors[hash(str(group_val)) % len(colors)]
+            
+            result['datasets'].append({
+                'label': str(group_val),
+                'data': subset.set_index(x_column).loc[result['labels'], y_column].fillna(0).tolist(),
+                'backgroundColor': color,
+                'borderColor': color,
+                'borderWidth': 2
+            })
+    else:
+        # Single series
+        result = {
+            'chart_type': chart_type,
+            'x_column': x_column,
+            'y_column': y_column,
+            'aggregation': aggregation,
+            'labels': aggregated[x_column].tolist(),
+            'datasets': [{
+                'label': f'{aggregation.upper()} {y_column}',
+                'data': aggregated[y_column].tolist(),
+                'backgroundColor': 'rgba(0, 133, 93, 0.8)',
+                'borderColor': '#00855D',
+                'borderWidth': 2
+            }]
+        }
+    
+    return result
+
+
 @app.route('/clear', methods=['POST'])
 def clear():
     token = request.headers.get('X-Session-Token')
