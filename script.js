@@ -324,6 +324,17 @@ async function handleFileUpload(file) {
         
         console.log('Upload response status:', response.status);
         
+        if (response.status === 401) {
+            // Session expired or invalid - clear and redirect to login
+            console.warn('Session invalid - redirecting to login');
+            clearToken();
+            sessionToken = null;
+            hideLoadingScreen();
+            showError('❌ انتهت جلسة المستخدم - يرجى تسجيل الدخول مرة أخرى');
+            setTimeout(() => showLoginPage(), 2000);
+            return;
+        }
+        
         if (!response.ok) {
             const errorData = await response.json();
             console.error('Upload error response:', errorData);
@@ -618,6 +629,11 @@ async function runMultiColumnAnalysis(xCol, yColumns, chartType, aggregation) {
                     aggregation: aggregation
                 })
             }).then(async r => {
+                if (r.status === 401) {
+                    clearToken();
+                    sessionToken = null;
+                    throw new Error('انتهت جلسة المستخدم - يرجى تسجيل الدخول مرة أخرى');
+                }
                 const data = await r.json();
                 if (!r.ok) {
                     console.error(`❌ Failed for ${yCol}:`, data.error);
@@ -702,6 +718,12 @@ async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
                 aggregation: aggregation
             })
         });
+        
+        if (response.status === 401) {
+            clearToken();
+            sessionToken = null;
+            throw new Error('انتهت جلسة المستخدم - يرجى تسجيل الدخول مرة أخرى');
+        }
         
         if (!response.ok) {
             throw new Error('Analysis failed: ' + response.status);
