@@ -574,7 +574,7 @@ def analyze_background(file_id, sheet_name, file_bytes):
                 progress[file_id] = {'status': '📥 جاري قراءة...', 'progress': 1}
         
         logger.info(f"Reading sheet: {sheet_name}")
-        df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name)
+        df, _ = load_dataframe(file_bytes, sheet_name)
         df = df.dropna(how='all')
         
         logger.info(f"Loaded {len(df)} records")
@@ -590,6 +590,23 @@ def analyze_background(file_id, sheet_name, file_bytes):
         logger.error(f"Error: {e}")
         with lock:
             progress[file_id] = {'status': f'❌ خطأ: {str(e)}', 'progress': 0}
+
+
+def load_dataframe(file_bytes, sheet_name=None):
+    try:
+        excel = pd.ExcelFile(io.BytesIO(file_bytes))
+        if sheet_name and sheet_name in excel.sheet_names:
+            use_sheet = sheet_name
+        else:
+            use_sheet = excel.sheet_names[0] if excel.sheet_names else 0
+        df = pd.read_excel(excel, sheet_name=use_sheet)
+        return df, excel.sheet_names
+    except Exception as excel_error:
+        try:
+            df = pd.read_csv(io.BytesIO(file_bytes))
+            return df, ['Sheet1']
+        except Exception:
+            raise excel_error
 
 
 # ============= AUTHENTICATION ENDPOINTS =============
@@ -801,8 +818,8 @@ def upload():
     logger.info(f"File: {file.filename} ({len(file_bytes)} bytes)")
     
     try:
-        excel = pd.ExcelFile(io.BytesIO(file_bytes))
-        sheets = excel.sheet_names
+        df_first, sheets = load_dataframe(file_bytes)
+        columns = [col for col in df_first.columns.tolist()]
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     
@@ -814,7 +831,7 @@ def upload():
         )
         thread.start()
     
-    return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id})
+    return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id, 'columns': columns})
 
 @app.route('/progress', methods=['GET'])
 def get_progress():
@@ -895,8 +912,7 @@ def get_columns():
         return jsonify({'error': 'File not found'}), 404
     
     try:
-        excel = pd.ExcelFile(io.BytesIO(files[file_id]))
-        df = pd.read_excel(excel, sheet_name=sheet)
+        df, _ = load_dataframe(files[file_id], sheet)
         columns = [col for col in df.columns.tolist()]
         return jsonify({'columns': columns}), 200
     except Exception as e:
@@ -1082,7 +1098,7 @@ def dynamic_analysis():
         if file_id not in files:
             return jsonify({'error': 'File not found'}), 404
         
-        df = files[file_id]
+        df, _ = load_dataframe(files[file_id], sheet_name)
         
         # Validate columns exist
         if x_column not in df.columns or y_column not in df.columns:
@@ -1112,8 +1128,23 @@ def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_t
     df_clean[y_column] = pd.to_numeric(df_clean[y_column], errors='coerce')
     df_clean = df_clean.dropna(subset=[y_column])
     
+    # Always return consistent structure
     if len(df_clean) == 0:
-        return {'error': 'No valid data after cleaning', 'datasets': []}
+        return {
+            'chart_type': chart_type,
+            'x_column': x_column,
+            'y_column': y_column,
+            'aggregation': aggregation,
+            'labels': [],
+            'datasets': [{
+                'label': f'{aggregation.upper()} {y_column}',
+                'data': [],
+                'backgroundColor': 'rgba(0, 133, 93, 0.8)',
+                'borderColor': '#00855D',
+                'borderWidth': 2
+            }],
+            'message': 'لا توجد بيانات صالحة بعد التنظيف'
+        }
     
     # Aggregate data
     if group_by:

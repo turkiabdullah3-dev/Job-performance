@@ -346,6 +346,12 @@ async function handleFileUpload(file) {
 // ============= Chart Builder Modal =============
 
 function showChartBuilderModal(columns) {
+    // Validate columns
+    if (!Array.isArray(columns) || columns.length === 0) {
+        showError('❌ لا توجد أعمدة متاحة في الملف');
+        return;
+    }
+    
     const existingModal = document.getElementById('chart-builder-modal');
     if (existingModal) existingModal.remove();
     
@@ -569,6 +575,23 @@ async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
         }
         
         const data = await response.json();
+        
+        // Diagnostic logging
+        console.log('API response:', data);
+        
+        // Validate data structure
+        if (!data || typeof data !== 'object') {
+            throw new Error('البيانات المستلمة غير صالحة');
+        }
+        
+        if (!Array.isArray(data.labels) || data.labels.length === 0) {
+            throw new Error('لا توجد تسميات في البيانات');
+        }
+        
+        if (!Array.isArray(data.datasets) || data.datasets.length === 0) {
+            throw new Error('لا توجد مجموعات بيانات للرسم');
+        }
+        
         currentData = { xCol, yCol, groupBy, chartType, aggregation, ...data };
         
         hideLoadingScreen();
@@ -587,31 +610,41 @@ function renderDynamicChart(data, chartType) {
     const container = document.getElementById('chartContainer');
     if (!container) return;
     
+    // Final validation before rendering
+    if (!data || !Array.isArray(data.labels) || !Array.isArray(data.datasets)) {
+        showError('❌ لا توجد بيانات صالحة للعرض');
+        return;
+    }
+    
     container.innerHTML = '<canvas id="dynamicChart" style="width: 100%; height: 400px;"></canvas>';
     
     const ctx = document.getElementById('dynamicChart').getContext('2d');
     
     if (window.dynamicChart) window.dynamicChart.destroy();
     
+    // Safe datasets access
+    const safeDatasets = data.datasets || [];
+    const firstDataset = safeDatasets[0] || { data: [] };
+    
     const chartConfig = {
         bar: {
             type: 'bar',
-            data: { labels: data.labels, datasets: data.datasets },
+            data: { labels: data.labels, datasets: safeDatasets },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
         },
         line: {
             type: 'line',
-            data: { labels: data.labels, datasets: data.datasets.map(ds => ({...ds, borderColor: ds.backgroundColor, backgroundColor: 'transparent', tension: 0.3, borderWidth: 3})) },
+            data: { labels: data.labels, datasets: safeDatasets.map(ds => ({...ds, borderColor: ds.backgroundColor, backgroundColor: 'transparent', tension: 0.3, borderWidth: 3})) },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
         },
         pie: {
             type: 'doughnut',
-            data: { labels: data.labels, datasets: [{data: data.datasets[0].data, backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'], borderColor: '#fff', borderWidth: 3}] },
+            data: { labels: data.labels, datasets: [{data: firstDataset.data || [], backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'], borderColor: '#fff', borderWidth: 3}] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
         },
         scatter: {
             type: 'scatter',
-            data: { datasets: [{label: data.y_column, data: data.datasets[0].data.map((y, i) => ({ x: i, y: y })), backgroundColor: 'rgba(0, 133, 93, 0.8)', borderColor: '#00855D', borderWidth: 2, pointRadius: 8}] },
+            data: { datasets: [{label: data.y_column || 'Y', data: (firstDataset.data || []).map((y, i) => ({ x: i, y: y })), backgroundColor: 'rgba(0, 133, 93, 0.8)', borderColor: '#00855D', borderWidth: 2, pointRadius: 8}] },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true }, x: { display: false } } }
         }
     };
