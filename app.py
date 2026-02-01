@@ -1350,5 +1350,7 @@ if __name__ == '__main__':
     print("=" * 50)
     print(f"🌐 Server listening on port {PORT}")
     print("=" * 50 + "\n")
+    
+    app.run(host='0.0.0.0', port=PORT, debug=False)
 
 

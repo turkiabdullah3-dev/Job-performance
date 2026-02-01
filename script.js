@@ -49,28 +49,9 @@ function showError(message, timeout) {
 
 // Initialize session
 async function initSession() {
-    showLoadingScreen('جاري تهيئة الجلسة...', 'يرجى الانتظار');
-    try {
-        const response = await fetch(`${API_BASE}/init-session`, { 
-            method: 'GET', 
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
-        });
-        
-        if (!response.ok) {
-            throw new Error('Session init failed');
-        }
-        
-        const data = await response.json();
-        sessionToken = data.session_token;
-        hideLoadingScreen();
-        console.log('✓ Session initialized');
-    } catch (error) {
-        console.warn('Server not available, using demo mode:', error.message);
-        serverAvailable = false;
-        hideLoadingScreen();
-        showError('⚠️ الخادم غير متاح - جرب فتح http://127.0.0.1:8080', 10000);
-    }
+    console.log('Initializing app...');
+    hideLoadingScreen();
+    attachEventListeners();
 }
 
 // DOM ready - attach all event listeners
