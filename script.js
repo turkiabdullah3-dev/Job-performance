@@ -566,46 +566,75 @@ async function runMultiColumnAnalysis(xCol, yColumns, chartType, aggregation) {
     showLoadingScreen('جاري التحليل...' , 'تحليل أعمدة متعددة');
     
     try {
-        // Send requests for each Y column
-        const results = await Promise.all(
-            yColumns.map(yCol =>
-                fetch(`${API_BASE}/dynamic-analysis`, {
-                    method: 'POST',
-                    headers: {
-                        'X-Session-Token': sessionToken,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        file_id: currentFileId,
-                        sheet: currentSheetName,
-                        x_column: xCol,
-                        y_column: yCol,
-                        group_by: null,
-                        chart_type: chartType,
-                        aggregation: aggregation
-                    })
-                }).then(r => {
-                    if (!r.ok) throw new Error(`Analysis failed for ${yCol}`);
-                    return r.json();
+        // Send requests for each Y column - handle failures gracefully
+        const promises = yColumns.map(yCol =>
+            fetch(`${API_BASE}/dynamic-analysis`, {
+                method: 'POST',
+                headers: {
+                    'X-Session-Token': sessionToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file_id: currentFileId,
+                    sheet: currentSheetName,
+                    x_column: xCol,
+                    y_column: yCol,
+                    group_by: null,
+                    chart_type: chartType,
+                    aggregation: aggregation
                 })
-            )
+            }).then(async r => {
+                const data = await r.json();
+                if (!r.ok) {
+                    console.error(`❌ Failed for ${yCol}:`, data.error);
+                    throw new Error(data.error || `Analysis failed for ${yCol}`);
+                }
+                console.log(`✅ Loaded ${yCol}:`, data.labels?.length || 0, 'labels');
+                return { success: true, yColumn: yCol, data };
+            }).catch(err => {
+                console.error(`Error for ${yCol}:`, err.message);
+                return { success: false, yColumn: yCol, error: err.message };
+            })
         );
+        
+        const results = await Promise.all(promises);
+        console.log('Multi-column results:', results);
+        
+        // Filter successful results
+        const successfulResults = results.filter(r => r.success);
+        
+        if (successfulResults.length === 0) {
+            throw new Error('فشل تحليل جميع الأعمدة: ' + results.map(r => r.error).join(', '));
+        }
+        
+        if (successfulResults.length < yColumns.length) {
+            const failedColumns = results.filter(r => !r.success).map(r => r.yColumn).join(', ');
+            showError(`⚠️ فشل تحليل الأعمدة: ${failedColumns}. سيتم عرض الأعمدة الأخرى.`);
+        }
+        
+        // Get labels from first successful result
+        const labels = successfulResults[0].data.labels;
+        
+        if (!Array.isArray(labels) || labels.length === 0) {
+            throw new Error('لا توجد تسميات في البيانات');
+        }
         
         // Combine results into single chart with multiple datasets
         const combinedData = {
             chart_type: chartType,
             x_column: xCol,
-            y_columns: yColumns,
+            y_columns: successfulResults.map(r => r.yColumn),
             aggregation: aggregation,
-            labels: results[0].labels,
-            datasets: results.flatMap((result, idx) => 
-                result.datasets.map(ds => ({
+            labels: labels,
+            datasets: successfulResults.flatMap((result, idx) => {
+                const data = result.data;
+                return (data.datasets || []).map(ds => ({
                     ...ds,
-                    label: yColumns[idx],
+                    label: result.yColumn,
                     backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'][idx % 6],
                     borderColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'][idx % 6]
                 }))
-            )
+            })
         };
         
         console.log('Combined multi-column data:', combinedData);

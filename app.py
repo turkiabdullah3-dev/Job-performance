@@ -1105,17 +1105,28 @@ def dynamic_analysis():
         chart_type = data.get('chart_type', 'bar')
         aggregation = data.get('aggregation', 'avg')
         
+        logger.info(f"📊 Dynamic analysis requested: X={x_column}, Y={y_column}")
+        
         if not file_id or not x_column or not y_column:
-            return jsonify({'error': 'Missing required columns'}), 400
+            return jsonify({'error': 'Missing required columns (file_id, x_column, y_column)'}), 400
         
         if file_id not in files:
             return jsonify({'error': 'File not found'}), 404
         
-        df, _ = load_dataframe(files[file_id], sheet_name)
+        try:
+            df, _ = load_dataframe(files[file_id], sheet_name)
+        except Exception as e:
+            logger.error(f"Failed to load file: {str(e)}")
+            return jsonify({'error': f'Failed to load file: {str(e)}'}), 400
         
         # Validate columns exist
-        if x_column not in df.columns or y_column not in df.columns:
-            return jsonify({'error': 'Column not found in file'}), 400
+        if x_column not in df.columns:
+            available = list(df.columns)
+            return jsonify({'error': f'Column "{x_column}" not found. Available: {available}'}), 400
+            
+        if y_column not in df.columns:
+            available = list(df.columns)
+            return jsonify({'error': f'Column "{y_column}" not found. Available: {available}'}), 400
         
         if group_by and group_by not in df.columns:
             return jsonify({'error': f'Group column "{group_by}" not found'}), 400
@@ -1123,11 +1134,12 @@ def dynamic_analysis():
         # Process data
         result_data = process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_type)
         
-        logger.info(f"Dynamic analysis: {x_column} vs {y_column}, chart: {chart_type}")
+        logger.info(f"✅ Dynamic analysis complete: {x_column} vs {y_column}")
         return jsonify(result_data), 200
         
     except Exception as e:
-        logger.error(f"Dynamic analysis error: {e}", exc_info=True)
+        logger.error(f"❌ Dynamic analysis error: {e}", exc_info=True)
+        return jsonify({'error': f'Analysis error: {str(e)}'}), 500
         return jsonify({'error': f'Analysis error: {str(e)}'}), 500
 
 
