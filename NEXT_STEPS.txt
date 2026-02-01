@@ -1,0 +1,144 @@
+# 🚀 خطوات النشر على Render و Cloudflare
+
+## ✅ ما اكتمل:
+- ✅ GitHub مربوط: turkiabdullah3-dev/Job-performance
+- ✅ الكود مرفوع على GitHub
+- ✅ requirements.txt جاهز (Flask, gunicorn, etc)
+- ✅ render.yaml مهيأ للنشر
+- ✅ app.py مع CORS معد
+
+---
+
+## 🔴 ما تبقى:
+
+### الخطوة 1: نشر على Render (10 دقائق)
+
+**في Render:**
+1. اذهب: https://render.com
+2. Sign up / Login with GitHub
+3. اضغط: **New +** → **Web Service**
+4. اختر: **Public Git Repository**
+5. ضع رابط GitHub:
+   ```
+   https://github.com/turkiabdullah3-dev/Job-performance
+   ```
+6. اضغط: **Connect**
+7. ملأ البيانات:
+   ```
+   Name:    hr-analytics-backend
+   Region:  Frankfurt (أو الأقرب)
+   Branch:  main
+   ```
+8. Build Command:
+   ```
+   pip install -r requirements.txt
+   ```
+9. Start Command:
+   ```
+   gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+   ```
+10. اضغط: **Advanced** وأضف في Environment:
+    ```
+    ALLOWED_ORIGINS=https://turki20.sa,https://www.turki20.sa
+    FLASK_ENV=production
+    ```
+11. اضغط: **Create Web Service**
+
+**انتظر 3-5 دقائق حتى يقول: Live ✅**
+
+---
+
+### الخطوة 2: خذ رابط Render
+
+**بعد ما Render يقول Live:**
+```
+انسخ الرابط: https://xxxxx.onrender.com
+```
+
+---
+
+### الخطوة 3: حدّث script.js (1 دقيقة)
+
+**في VS Code:**
+1. افتح: `script.js`
+2. السطر 13، ابحث عن:
+   ```javascript
+   'https://YOUR-RENDER-APP-NAME.onrender.com'
+   ```
+3. استبدله بالرابط اللي نسخته:
+   ```javascript
+   'https://xxxxx.onrender.com'
+   ```
+4. احفظ: `Cmd+S`
+
+**في Terminal:**
+```bash
+cd /Users/turki/Desktop/hr
+
+git add script.js
+git commit -m "Update Render backend URL"
+git push
+```
+
+---
+
+### الخطوة 4: نشّر على Cloudflare Pages (تلقائي)
+
+**Cloudflare سيرى التحديث في GitHub ويعيد نشر تلقائياً**
+
+انتظر 1-2 دقيقة ثم:
+1. افتح: https://turki20.sa
+2. اضغط F12 (Console)
+3. تأكد: ما فيه أخطاء أحمر
+4. حاول تحمل ملف Excel
+5. البيانات يجب تظهر ✅
+
+---
+
+## ⚠️ نقاط مهمة:
+
+### رابط GitHub الصحيح:
+```
+https://github.com/turkiabdullah3-dev/Job-performance
+```
+
+### Render يستخدم:
+- **Branch:** main
+- **Build Command:** pip install -r requirements.txt
+- **Start:** gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+- **Environment:** ALLOWED_ORIGINS, FLASK_ENV, PYTHON_VERSION
+
+### script.js يستخدم:
+```javascript
+// محلي:
+http://127.0.0.1:8080
+
+// أونلاين (turki20.sa):
+https://xxxxx.onrender.com
+```
+
+### Cloudflare Pages:
+```
+- ما يشغل Python أبداً
+- فقط HTML/CSS/JavaScript
+- يتصل بـ Backend عبر HTTP calls
+```
+
+---
+
+## 🧪 اختبر الآن:
+
+**بعد كل خطوة:**
+```bash
+# اختبر Backend:
+curl https://xxxxx.onrender.com/init-session
+
+# اختبر Frontend:
+# افتح https://turki20.sa
+# F12 → Console
+# رفع ملف Excel
+```
+
+---
+
+**ابدأ من الخطوة 1 الآن!** 🚀

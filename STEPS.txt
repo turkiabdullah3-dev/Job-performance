@@ -1,0 +1,134 @@
+# ⚡ الخطوات العملية - انقر هنا وجرّب
+
+## 👇 انسخ-الصق الأوامر واحد تلو الآخر
+
+### الخطوة 1: تحقق من Git
+```bash
+cd /Users/turki/Desktop/hr
+git status
+```
+
+**النتيجة المتوقعة:** 
+```
+On branch main
+nothing to commit, working tree clean
+```
+
+---
+
+### الخطوة 2: أنشئ GitHub Repository
+
+1. افتح [github.com/new](https://github.com/new) في المتصفح
+2. **Repository Name:** `hr-analytics-backend`
+3. **Description:** `HR Analytics - turki20.sa`
+4. اضغط **Create repository**
+5. **نسخ الأمر** الذي يعطيك (عادة يكون):
+```
+git remote add origin https://github.com/YOUR_USERNAME/hr-analytics-backend.git
+git push -u origin main
+```
+
+---
+
+### الخطوة 3: ربط مع GitHub وارفع
+
+شغّل هذا الأمر (استبدل USERNAME):
+```bash
+cd /Users/turki/Desktop/hr
+git remote add origin https://github.com/turki20/hr-analytics-backend.git
+git push -u origin main
+```
+
+**النتيجة المتوقعة:**
+```
+Enumerating objects: 31, done.
+...
+To https://github.com/turki20/hr-analytics-backend.git
+ * [new branch]      main -> main
+Branch 'main' set up to track remote branch 'main' from 'origin'.
+```
+
+---
+
+### الخطوة 4: نشر على Render
+
+1. افتح [render.com](https://render.com)
+2. **Sign up** أو **Sign in** بـ GitHub
+3. اضغط **New +** → **Web Service**
+4. اختر Repository: `hr-analytics-backend`
+5. الإعدادات:
+   - **Name:** `turki20-hr-api`
+   - **Environment:** Python 3
+   - **Build:** `pip install -r requirements.txt`
+   - **Start:** `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
+
+6. **Advanced** → Environment Variables:
+   ```
+   ALLOWED_ORIGINS = https://turki20.sa,https://www.turki20.sa,http://localhost:8080
+   FLASK_ENV = production
+   PYTHON_VERSION = 3.11
+   ```
+
+7. اضغط **Create Web Service**
+8. **انتظر 3-5 دقائق**
+9. **انسخ الرابط** (يظهر في الأعلى): `https://turki20-hr-api.onrender.com`
+
+---
+
+### الخطوة 5: تحديث script.js
+
+افتح الملف واستبدل السطر 13:
+
+```javascript
+// قبل:
+const API_BASE = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' 
+    ? 'http://127.0.0.1:8080' 
+    : 'https://YOUR-RENDER-APP-NAME.onrender.com';
+
+// بعد (ضع رابط Render):
+const API_BASE = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' 
+    ? 'http://127.0.0.1:8080' 
+    : 'https://turki20-hr-api.onrender.com';
+```
+
+---
+
+### الخطوة 6: ارفع على Cloudflare Pages
+
+```bash
+cd /Users/turki/Desktop/hr
+git add script.js
+git commit -m "Update API endpoint to Render"
+git push
+```
+
+**أو:** رفع يدوي من Cloudflare Dashboard
+
+---
+
+## ✅ التحقق
+
+### اختبر Backend
+افتح في المتصفح:
+```
+https://turki20-hr-api.onrender.com/init-session
+```
+
+### اختبر Frontend
+```
+https://turki20.sa
+```
+
+### اختبر كامل (تفاعلي)
+افتح `test_backend.html` في المتصفح
+
+---
+
+## 🎉 انتهى!
+
+بعد كل هذه الخطوات:
+- ✅ Backend شغال على Render
+- ✅ Frontend شغال على turki20.sa
+- ✅ كل شيء متصل
+
+**استمتع بموقعك! 🚀**

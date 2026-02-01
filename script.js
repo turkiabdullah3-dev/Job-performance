@@ -57,9 +57,174 @@ async function initSession() {
 // DOM ready - attach all event listeners
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM ready, initializing...');
+    buildPageHTML();
     initSession();
     attachEventListeners();
 });
+
+// Build the main page structure
+function buildPageHTML() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    
+    app.innerHTML = `
+        <!-- Loading Screen -->
+        <div id="loadingScreen">
+            <div class="loading-spinner"></div>
+            <div id="loadingText">جاري المعالجة...</div>
+            <div id="loadingSubtext">يرجى الانتظار</div>
+        </div>
+
+        <!-- Error Banner -->
+        <div id="error-banner"></div>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <i class="fas fa-chart-bar"></i>
+                    <div>
+                        <h1>نظام تحليل الأداء الوظيفي</h1>
+                        <p>وزارة التعليم - المملكة العربية السعودية</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <div class="container">
+            <!-- Upload Section -->
+            <div class="upload-section" onclick="document.getElementById('excel-file').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h2>رفع ملف Excel</h2>
+                <p>اضغط أو اسحب ملف Excel للبدء في التحليل</p>
+                <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" />
+            </div>
+
+            <!-- Stats Section -->
+            <div id="statsSection" class="stats-section" style="display:none;">
+                <div class="stat-card">
+                    <i class="fas fa-database"></i>
+                    <div>
+                        <p>إجمالي السجلات</p>
+                        <h3 id="total-records">-</h3>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <p>التقييمات الصحيحة</p>
+                        <h3 id="valid-ratings">-</h3>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-star"></i>
+                    <div>
+                        <p>متوسط التقييم</p>
+                        <h3 id="avg-rating">-</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div id="chartsSection" style="display:none;">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <i class="fas fa-chart-bar"></i>
+                        <h2>التقييمات حسب الأقسام</h2>
+                    </div>
+                    <canvas id="departmentsChart" height="300"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <i class="fas fa-chart-pie"></i>
+                        <h2>توزيع التقييمات</h2>
+                    </div>
+                    <canvas id="ratingsDistribution" height="300"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <i class="fas fa-users"></i>
+                        <h2>عدد الموظفين حسب القسم</h2>
+                    </div>
+                    <canvas id="employeesByDept" height="300"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <i class="fas fa-compress"></i>
+                        <h2>مقارنة الأداء</h2>
+                    </div>
+                    <canvas id="performanceComparison" height="300"></canvas>
+                </div>
+            </div>
+
+            <!-- Cities Chart Section -->
+            <div id="citiesChartSection" style="display:none;">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <h2>أداء المدن والمناطق</h2>
+                    </div>
+                    <canvas id="citiesChart" height="300"></canvas>
+                </div>
+            </div>
+
+            <!-- Filters Section -->
+            <div id="filtersSection" style="display:none;">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <i class="fas fa-filter"></i>
+                        <h2>الفلاتر والتحكم</h2>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div>
+                            <label style="font-weight: 600; display: block; margin-bottom: 5px;">المنطقة:</label>
+                            <select id="filter-region-main" style="width: 100%; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px;">
+                                <option value="">جميع المناطق</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; display: block; margin-bottom: 5px;">القسم:</label>
+                            <select id="filter-department" style="width: 100%; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px;">
+                                <option value="">جميع الأقسام</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; display: block; margin-bottom: 5px;">التقييم من:</label>
+                            <input type="number" id="filter-rating-min" min="0" max="5" step="0.1" style="width: 100%; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px;" />
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; display: block; margin-bottom: 5px;">التقييم إلى:</label>
+                            <input type="number" id="filter-rating-max" min="0" max="5" step="0.1" style="width: 100%; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px;" />
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button id="apply-filters" class="btn btn-primary" style="flex: 1;">
+                            <i class="fas fa-check"></i> تطبيق الفلاتر
+                        </button>
+                        <button id="reset-filters" class="btn btn-secondary" style="flex: 1;">
+                            <i class="fas fa-redo"></i> إعادة تعيين
+                        </button>
+                        <button id="clear-data" class="btn btn-danger" style="flex: 1;">
+                            <i class="fas fa-trash"></i> مسح البيانات
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>© 2026 منظومة إدارة الأداء الوظيفي - جميع الحقوق محفوظة</p>
+        </div>
+    `;
+}
+
 
 function attachEventListeners() {
     const fileInput = document.getElementById('excel-file');
@@ -191,6 +356,14 @@ function renderDashboard(data) {
     try {
         hideLoadingScreen();
         
+        // Guard: ensure data is valid
+        if (!data || typeof data !== 'object') {
+            showError('خطأ: البيانات المستقبلة غير صحيحة');
+            return;
+        }
+        
+        console.log('Rendering dashboard with data:', data);
+        
         // Show sections
         const statsSection = document.getElementById('statsSection');
         const chartsSection = document.getElementById('chartsSection');
@@ -202,24 +375,27 @@ function renderDashboard(data) {
         if (citiesChartSection) citiesChartSection.style.display = 'block';
         if (filtersSection) filtersSection.style.display = 'block';
         
-        // Stats
-        if (data.total_records) {
+        // Stats - guard against missing or undefined values
+        if (data.total_records !== undefined) {
             const totalEl = document.getElementById('total-records');
             const validEl = document.getElementById('valid-ratings');
             const avgEl = document.getElementById('avg-rating');
             
-            if (totalEl) totalEl.textContent = data.total_records.toLocaleString('ar-SA');
-            if (validEl) validEl.textContent = data.valid_ratings.toLocaleString('ar-SA');
-            if (avgEl) avgEl.textContent = data.avg_rating.toFixed(2);
+            if (totalEl) totalEl.textContent = (data.total_records || 0).toLocaleString('ar-SA');
+            if (validEl) validEl.textContent = (data.valid_ratings || 0).toLocaleString('ar-SA');
+            if (avgEl) avgEl.textContent = parseFloat(data.avg_rating || 0).toFixed(2);
         }
         
-        // Charts
-        if (data.top_departments && data.top_departments.length > 0) {
+        // Charts - guard against empty or missing departments
+        if (data.top_departments && Array.isArray(data.top_departments) && data.top_departments.length > 0) {
             renderDepartmentsChart(data.top_departments);
             renderRatingsDistribution(data.top_departments);
             renderEmployeesByDept(data.top_departments);
             renderPerformanceComparison(data.top_departments);
             renderCitiesChart(data.top_departments);
+        } else {
+            console.warn('No top_departments data available for charts');
+            showError('لا توجد بيانات كافية لعرض الرسوم البيانية');
         }
         
         rawAnalyticsData = data;
@@ -229,251 +405,312 @@ function renderDashboard(data) {
         
     } catch (error) {
         console.error('Dashboard render error:', error);
-        showError('خطأ: ' + error.message);
+        showError('خطأ في عرض لوحة المعلومات: ' + error.message);
     }
 }
 
 // Charts
 function renderDepartmentsChart(depts) {
     const ctx = document.getElementById('departmentsChart');
-    if (!ctx) return;
+    if (!ctx || !depts || depts.length === 0) {
+        console.warn('Cannot render departments chart: missing context or data');
+        return;
+    }
     
-    const names = depts.map(d => d.name);
-    const ratings = depts.map(d => d.rating);
-    
-    if (window.deptChart) window.deptChart.destroy();
-    
-    window.deptChart = new Chart(ctx, {
-        type: 'bar',
-        data: { 
-            labels: names, 
-            datasets: [{ 
-                label: 'التقييم', 
-                data: ratings, 
-                backgroundColor: 'rgba(0, 133, 93, 0.8)', 
-                borderColor: '#00855D', 
-                borderWidth: 2 
-            }] 
-        },
-        options: { 
-            indexAxis: 'y', 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            scales: { 
-                x: { 
-                    beginAtZero: true, 
-                    max: 5, 
-                    grid: { color: 'rgba(0,0,0,0.05)' } 
-                }, 
-                y: { 
-                    grid: { display: false } 
-                } 
-            }, 
-            plugins: { 
-                legend: { display: false } 
-            } 
+    try {
+        const names = depts.map(d => d.name || 'Unknown');
+        const ratings = depts.map(d => parseFloat(d.rating) || 0);
+        
+        if (window.deptChart) {
+            try { window.deptChart.destroy(); } catch (e) {}
         }
-    });
+        
+        window.deptChart = new Chart(ctx, {
+            type: 'bar',
+            data: { 
+                labels: names, 
+                datasets: [{ 
+                    label: 'التقييم', 
+                    data: ratings, 
+                    backgroundColor: 'rgba(0, 133, 93, 0.8)', 
+                    borderColor: '#00855D', 
+                    borderWidth: 2 
+                }] 
+            },
+            options: { 
+                indexAxis: 'y', 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    x: { 
+                        beginAtZero: true, 
+                        max: 5, 
+                        grid: { color: 'rgba(0,0,0,0.05)' } 
+                    }, 
+                    y: { 
+                        grid: { display: false } 
+                    } 
+                }, 
+                plugins: { 
+                    legend: { display: false } 
+                } 
+            }
+        });
+    } catch (error) {
+        console.error('Error rendering departments chart:', error);
+    }
 }
 
 function renderRatingsDistribution(depts) {
     const ctx = document.getElementById('ratingsDistribution');
-    if (!ctx) return;
+    if (!ctx || !depts || depts.length === 0) {
+        console.warn('Cannot render ratings chart: missing context or data');
+        return;
+    }
     
-    const buckets = { 'ممتاز': 0, 'جيد جداً': 0, 'جيد': 0, 'مقبول': 0, 'ضعيف': 0 };
-    
-    depts.forEach(d => {
-        if (d.rating >= 5.0) buckets['ممتاز'] += d.employees;
-        else if (d.rating >= 4.0) buckets['جيد جداً'] += d.employees;
-        else if (d.rating >= 3.0) buckets['جيد'] += d.employees;
-        else if (d.rating >= 2.0) buckets['مقبول'] += d.employees;
-        else buckets['ضعيف'] += d.employees;
-    });
-    
-    if (window.ratingsChart) window.ratingsChart.destroy();
-    
-    window.ratingsChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: { 
-            labels: Object.keys(buckets), 
-            datasets: [{ 
-                data: Object.values(buckets), 
-                backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935'], 
-                borderWidth: 3, 
-                borderColor: '#fff' 
-            }] 
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            plugins: { 
-                legend: { 
-                    position: 'bottom', 
-                    labels: { padding: 10 } 
-                } 
-            } 
+    try {
+        const buckets = { 'ممتاز': 0, 'جيد جداً': 0, 'جيد': 0, 'مقبول': 0, 'ضعيف': 0 };
+        
+        depts.forEach(d => {
+            const rating = parseFloat(d.rating) || 0;
+            const employees = parseInt(d.employees) || 1;
+            if (rating >= 4.5) buckets['ممتاز'] += employees;
+            else if (rating >= 3.5) buckets['جيد جداً'] += employees;
+            else if (rating >= 2.5) buckets['جيد'] += employees;
+            else if (rating >= 1.5) buckets['مقبول'] += employees;
+            else buckets['ضعيف'] += employees;
+        });
+        
+        if (window.ratingsChart) {
+            try { window.ratingsChart.destroy(); } catch (e) {}
         }
-    });
+        
+        window.ratingsChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: { 
+                labels: Object.keys(buckets), 
+                datasets: [{ 
+                    data: Object.values(buckets), 
+                    backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935'], 
+                    borderWidth: 3, 
+                    borderColor: '#fff' 
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { padding: 10 } 
+                    } 
+                } 
+            }
+        });
+    } catch (error) {
+        console.error('Error rendering ratings chart:', error);
+    }
 }
 
 function renderEmployeesByDept(depts) {
     const ctx = document.getElementById('employeesByDept');
-    if (!ctx) return;
+    if (!ctx || !depts || depts.length === 0) {
+        console.warn('Cannot render employees chart: missing context or data');
+        return;
+    }
     
-    const names = depts.map(d => d.name);
-    const employees = depts.map(d => d.employees);
-    
-    if (window.empChart) window.empChart.destroy();
-    
-    window.empChart = new Chart(ctx, {
-        type: 'bar',
-        data: { 
-            labels: names, 
-            datasets: [{ 
-                label: 'الموظفين', 
-                data: employees, 
-                backgroundColor: 'rgba(184, 134, 11, 0.8)', 
-                borderColor: '#B8860B', 
-                borderWidth: 2 
-            }] 
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            scales: { 
-                y: { 
-                    beginAtZero: true, 
-                    grid: { color: 'rgba(0,0,0,0.05)' } 
-                }, 
-                x: { 
-                    grid: { display: false }, 
-                    ticks: { maxRotation: 45 } 
-                } 
-            }, 
-            plugins: { 
-                legend: { display: false } 
-            } 
+    try {
+        const names = depts.map(d => d.name || 'Unknown');
+        const employees = depts.map(d => parseInt(d.employees) || 0);
+        
+        if (window.empChart) {
+            try { window.empChart.destroy(); } catch (e) {}
         }
-    });
+        
+        window.empChart = new Chart(ctx, {
+            type: 'bar',
+            data: { 
+                labels: names, 
+                datasets: [{ 
+                    label: 'الموظفين', 
+                    data: employees, 
+                    backgroundColor: 'rgba(184, 134, 11, 0.8)', 
+                    borderColor: '#B8860B', 
+                    borderWidth: 2 
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: 'rgba(0,0,0,0.05)' } 
+                    }, 
+                    x: { 
+                        grid: { display: false }, 
+                        ticks: { maxRotation: 45 } 
+                    } 
+                }, 
+                plugins: { 
+                    legend: { display: false } 
+                } 
+            } 
+        });
+    } catch (error) {
+        console.error('Error rendering employees chart:', error);
+    }
 }
 
 function renderPerformanceComparison(depts) {
     const ctx = document.getElementById('performanceComparison');
-    if (!ctx) return;
+    if (!ctx || !depts || depts.length === 0) {
+        console.warn('Cannot render performance chart: missing context or data');
+        return;
+    }
     
-    if (window.perfChart) window.perfChart.destroy();
-    
-    window.perfChart = new Chart(ctx, {
-        type: 'scatter',
-        data: { 
-            datasets: [{ 
-                label: 'الأقسام', 
-                data: depts.map(d => ({ x: d.employees, y: d.rating })), 
-                backgroundColor: 'rgba(255, 193, 7, 0.8)', 
-                borderColor: '#ffc107', 
-                borderWidth: 2, 
-                pointRadius: 10 
-            }] 
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
-            scales: { 
-                x: { 
-                    title: { display: true, text: 'الموظفين' }, 
-                    grid: { color: 'rgba(0,0,0,0.05)' } 
-                }, 
-                y: { 
-                    title: { display: true, text: 'التقييم' }, 
-                    beginAtZero: true, 
-                    max: 5, 
-                    grid: { color: 'rgba(0,0,0,0.05)' } 
-                } 
-            }, 
-            plugins: { 
-                legend: { display: false }
-            } 
+    try {
+        if (window.perfChart) {
+            try { window.perfChart.destroy(); } catch (e) {}
         }
-    });
+        
+        const scatterData = depts
+            .filter(d => d.employees && d.rating !== undefined)
+            .map(d => ({ 
+                x: parseInt(d.employees) || 0, 
+                y: parseFloat(d.rating) || 0 
+            }));
+        
+        window.perfChart = new Chart(ctx, {
+            type: 'scatter',
+            data: { 
+                datasets: [{ 
+                    label: 'الأقسام', 
+                    data: scatterData, 
+                    backgroundColor: 'rgba(255, 193, 7, 0.8)', 
+                    borderColor: '#ffc107', 
+                    borderWidth: 2, 
+                    pointRadius: 10 
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    x: { 
+                        title: { display: true, text: 'الموظفين' }, 
+                        grid: { color: 'rgba(0,0,0,0.05)' } 
+                    }, 
+                    y: { 
+                        title: { display: true, text: 'التقييم' }, 
+                        beginAtZero: true, 
+                        max: 5, 
+                        grid: { color: 'rgba(0,0,0,0.05)' } 
+                    } 
+                }, 
+                plugins: { 
+                    legend: { display: false }
+                } 
+            }
+        });
+    } catch (error) {
+        console.error('Error rendering performance chart:', error);
+    }
 }
 
 // Cities Chart - أداء المدن
 function renderCitiesChart(depts) {
     const ctx = document.getElementById('citiesChart');
-    if (!ctx) return;
+    if (!ctx || !depts || depts.length === 0) {
+        console.warn('Cannot render cities chart: missing context or data');
+        return;
+    }
     
-    // Group by city (extract city from department name)
-    const cityData = {};
-    depts.forEach(d => {
-        const city = extractCityFromName(d.name) || 'أخرى';
-        if (!cityData[city]) {
-            cityData[city] = { totalRating: 0, count: 0, employees: 0 };
+    try {
+        // Group by city (extract city from department name)
+        const cityData = {};
+        depts.forEach(d => {
+            const city = extractCityFromName(d.name) || 'أخرى';
+            if (!cityData[city]) {
+                cityData[city] = { totalRating: 0, count: 0, employees: 0 };
+            }
+            const rating = parseFloat(d.rating) || 0;
+            const employees = parseInt(d.employees) || 1;
+            cityData[city].totalRating += rating * employees;
+            cityData[city].count += 1;
+            cityData[city].employees += employees;
+        });
+        
+        const cities = Object.keys(cityData);
+        if (cities.length === 0) {
+            console.warn('No cities data available');
+            return;
         }
-        cityData[city].totalRating += d.rating * d.employees;
-        cityData[city].count += 1;
-        cityData[city].employees += d.employees;
-    });
-    
-    const cities = Object.keys(cityData);
-    const avgRatings = cities.map(c => cityData[c].totalRating / cityData[c].employees);
-    const employees = cities.map(c => cityData[c].employees);
-    
-    if (window.citiesChart) window.citiesChart.destroy();
-    
-    window.citiesChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: cities,
-            datasets: [
-                {
-                    label: 'متوسط التقييم',
-                    data: avgRatings,
-                    backgroundColor: 'rgba(0, 133, 93, 0.8)',
-                    borderColor: '#00855D',
-                    borderWidth: 2,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'عدد الموظفين',
-                    data: employees,
-                    backgroundColor: 'rgba(184, 134, 11, 0.8)',
-                    borderColor: '#B8860B',
-                    borderWidth: 2,
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    type: 'linear',
-                    position: 'right',
-                    title: { display: true, text: 'التقييم', color: '#00855D' },
-                    beginAtZero: true,
-                    max: 5,
-                    grid: { color: 'rgba(0,0,0,0.05)' }
-                },
-                y1: {
-                    type: 'linear',
-                    position: 'left',
-                    title: { display: true, text: 'الموظفين', color: '#B8860B' },
-                    beginAtZero: true,
-                    grid: { display: false }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 45 }
-                }
+        
+        const avgRatings = cities.map(c => cityData[c].totalRating / Math.max(cityData[c].employees, 1));
+        const employees = cities.map(c => cityData[c].employees);
+        
+        if (window.citiesChart) {
+            try { window.citiesChart.destroy(); } catch (e) {}
+        }
+        
+        window.citiesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: cities,
+                datasets: [
+                    {
+                        label: 'متوسط التقييم',
+                        data: avgRatings,
+                        backgroundColor: 'rgba(0, 133, 93, 0.8)',
+                        borderColor: '#00855D',
+                        borderWidth: 2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'عدد الموظفين',
+                        data: employees,
+                        backgroundColor: 'rgba(184, 134, 11, 0.8)',
+                        borderColor: '#B8860B',
+                        borderWidth: 2,
+                        yAxisID: 'y1'
+                    }
+                ]
             },
-            plugins: {
-                legend: {
-                    position: 'bottom'
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: 'التقييم', color: '#00855D' },
+                        beginAtZero: true,
+                        max: 5,
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        position: 'left',
+                        title: { display: true, text: 'الموظفين', color: '#B8860B' },
+                        beginAtZero: true,
+                        grid: { display: false }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxRotation: 45 }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error rendering cities chart:', error);
+    }
 }
 
 // Helper to extract city name from department name
@@ -652,7 +889,9 @@ async function showColumnSelectionModal(sheetName) {
         }
         
         const data = await response.json();
-        availableColumns = data.columns || [];
+        // Extract column names from column objects {name, numeric_percentage, is_numeric}
+        const columnObjects = data.columns || [];
+        availableColumns = columnObjects.map(c => c.name || c);
         
         // إنشاء نافذة الاختيار
         createColumnSelectionUI(availableColumns);
