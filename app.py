@@ -1127,96 +1127,98 @@ def dynamic_analysis():
         return jsonify(result_data), 200
         
     except Exception as e:
-        logger.error(f"Dynamic analysis error: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Dynamic analysis error: {e}", exc_info=True)
+        return jsonify({'error': f'Analysis error: {str(e)}'}), 500
 
 
 def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_type):
     """معالجة البيانات للرسوم البيانية الديناميكية"""
     
-    # Clean data
-    df_clean = df[[x_column, y_column] + ([group_by] if group_by else [])].dropna()
-    
-    # Convert y_column to numeric if possible
-    df_clean[y_column] = pd.to_numeric(df_clean[y_column], errors='coerce')
-    df_clean = df_clean.dropna(subset=[y_column])
-    
-    # Always return consistent structure
-    if len(df_clean) == 0:
-        return {
-            'chart_type': chart_type,
-            'x_column': x_column,
-            'y_column': y_column,
-            'aggregation': aggregation,
-            'labels': [],
-            'datasets': [{
-                'label': f'{aggregation.upper()} {y_column}',
-                'data': [],
-                'backgroundColor': 'rgba(0, 133, 93, 0.8)',
-                'borderColor': '#00855D',
-                'borderWidth': 2
-            }],
-            'message': 'لا توجد بيانات صالحة بعد التنظيف'
-        }
-    
-    # Aggregate data
-    if group_by:
-        grouped = df_clean.groupby([x_column, group_by])[y_column]
-    else:
-        grouped = df_clean.groupby(x_column)[y_column]
-    
-    # Apply aggregation function
-    agg_func = {
-        'sum': 'sum',
-        'avg': 'mean',
-        'count': 'count',
-        'max': 'max',
-        'min': 'min'
-    }.get(aggregation, 'mean')
-    
-    aggregated = grouped.agg(agg_func).reset_index()
-    
-    if group_by:
-        # Multiple series for grouped data
-        result = {
-            'chart_type': chart_type,
-            'x_column': x_column,
-            'y_column': y_column,
-            'aggregation': aggregation,
-            'labels': sorted(aggregated[x_column].unique().tolist()),
-            'datasets': []
-        }
+    try:
+        # Select columns and drop nulls
+        cols_needed = [x_column, y_column] + ([group_by] if group_by else [])
+        df_clean = df[cols_needed].copy()
+        df_clean = df_clean.dropna()
         
-        for group_val in aggregated[group_by].unique():
-            subset = aggregated[aggregated[group_by] == group_val]
-            colors = ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0']
-            color = colors[hash(str(group_val)) % len(colors)]
+        # Convert y_column to numeric
+        df_clean[y_column] = pd.to_numeric(df_clean[y_column], errors='coerce')
+        df_clean = df_clean.dropna(subset=[y_column])
+        
+        # If still no data, return empty structure
+        if len(df_clean) == 0:
+            logger.warning(f"No valid numeric data found for {y_column}")
+            return {
+                'chart_type': chart_type,
+                'x_column': x_column,
+                'y_column': y_column,
+                'aggregation': aggregation,
+                'labels': [],
+                'datasets': [{
+                    'label': f'{aggregation.upper()} {y_column}',
+                    'data': [],
+                    'backgroundColor': 'rgba(0, 133, 93, 0.8)',
+                    'borderColor': '#00855D',
+                    'borderWidth': 2
+                }],
+                'message': 'لا توجد بيانات صالحة'
+            }
+        
+        # Aggregate data
+        if group_by:
+            grouped = df_clean.groupby([x_column, group_by])[y_column]
+        else:
+            grouped = df_clean.groupby(x_column)[y_column]
+        
+        # Apply aggregation
+        agg_func = {'sum': 'sum', 'avg': 'mean', 'count': 'count', 'max': 'max', 'min': 'min'}.get(aggregation, 'mean')
+        aggregated = grouped.agg(agg_func).reset_index()
+        
+        if group_by:
+            # Multiple series for grouped data
+            result = {
+                'chart_type': chart_type,
+                'x_column': x_column,
+                'y_column': y_column,
+                'aggregation': aggregation,
+                'labels': sorted(aggregated[x_column].unique().tolist()),
+                'datasets': []
+            }
             
-            result['datasets'].append({
-                'label': str(group_val),
-                'data': subset.set_index(x_column).loc[result['labels'], y_column].fillna(0).tolist(),
-                'backgroundColor': color,
-                'borderColor': color,
-                'borderWidth': 2
-            })
-    else:
-        # Single series
-        result = {
-            'chart_type': chart_type,
-            'x_column': x_column,
-            'y_column': y_column,
-            'aggregation': aggregation,
-            'labels': aggregated[x_column].tolist(),
-            'datasets': [{
-                'label': f'{aggregation.upper()} {y_column}',
-                'data': aggregated[y_column].tolist(),
-                'backgroundColor': 'rgba(0, 133, 93, 0.8)',
-                'borderColor': '#00855D',
-                'borderWidth': 2
-            }]
-        }
-    
-    return result
+            for group_val in aggregated[group_by].unique():
+                subset = aggregated[aggregated[group_by] == group_val]
+                colors = ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0']
+                color = colors[hash(str(group_val)) % len(colors)]
+                
+                result['datasets'].append({
+                    'label': str(group_val),
+                    'data': subset.set_index(x_column).loc[result['labels'], y_column].fillna(0).tolist(),
+                    'backgroundColor': color,
+                    'borderColor': color,
+                    'borderWidth': 2
+                })
+        else:
+            # Single series
+            result = {
+                'chart_type': chart_type,
+                'x_column': x_column,
+                'y_column': y_column,
+                'aggregation': aggregation,
+                'labels': aggregated[x_column].astype(str).tolist(),
+                'datasets': [{
+                    'label': f'{aggregation.upper()} {y_column}',
+                    'data': aggregated[y_column].tolist(),
+                    'backgroundColor': 'rgba(0, 133, 93, 0.8)',
+                    'borderColor': '#00855D',
+                    'borderWidth': 2
+                }]
+            }
+        
+        logger.info(f"✓ Chart data: {len(result['labels'])} labels, {len(result['datasets'])} datasets")
+        return result
+        
+    except Exception as e:
+        logger.error(f"process_dynamic_chart error: {str(e)}", exc_info=True)
+        raise
 
 
 @app.route('/clear', methods=['POST'])

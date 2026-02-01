@@ -414,24 +414,19 @@ function showChartBuilderModal(columns) {
                 </select>
             </div>
             
-            <div>
+        <div style="margin-bottom: 25px;">
                 <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                    <i class="fas fa-arrows-alt-v"></i> المحور العمودي (Y):
+                    <i class="fas fa-arrows-alt-v"></i> الأعمدة المراد عرضها (Y) - اختر واحد أو أكثر:
                 </label>
-                <select id="y-column-select" style="
-                    width: 100%;
-                    padding: 12px;
-                    border: 2px solid #D4E5DD;
-                    border-radius: 10px;
-                    font-family: 'Cairo', sans-serif;
-                    font-size: 14px;
-                    background: white;
-                ">
-                    <option value="">-- اختر العمود --</option>
-                    ${columns.map(col => `<option value="${col}">${col}</option>`).join('')}
-                </select>
+                <div id="y-columns-container" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; background: white;">
+                    ${columns.map(col => `
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.2s;">
+                            <input type="checkbox" value="${col}" style="width: 16px; height: 16px; accent-color: #00855D;">
+                            <span style="font-family: 'Cairo', sans-serif; flex: 1;">${col}</span>
+                        </label>
+                    `).join('')}
+                </div>
             </div>
-        </div>
         
         <div style="margin-bottom: 25px;">
             <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
@@ -537,22 +532,92 @@ function showChartBuilderModal(columns) {
     
     document.getElementById('create-chart-btn').onclick = async () => {
         const xCol = document.getElementById('x-column-select').value;
-        const yCol = document.getElementById('y-column-select').value;
+        const yCheckboxes = Array.from(document.querySelectorAll('#y-columns-container input[type="checkbox"]:checked'));
+        const yColumns = yCheckboxes.map(cb => cb.value);
         const groupBy = document.getElementById('group-by-select').value || null;
         const chartType = document.querySelector('input[name="chart-type"]:checked').value;
         const aggregation = document.getElementById('aggregation-select').value;
         
-        if (!xCol || !yCol) {
-            showError('❌ يرجى اختيار العمودين الأفقي والعمودي');
+        if (!xCol) {
+            showError('❌ يرجى اختيار المحور الأفقي (X)');
+            return;
+        }
+        
+        if (yColumns.length === 0) {
+            showError('❌ يرجى اختيار عمود واحد على الأقل للمحور العمودي (Y)');
             return;
         }
         
         modal.remove();
-        await runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation);
+        
+        // If single Y column, use old flow
+        if (yColumns.length === 1) {
+            await runDynamicAnalysis(xCol, yColumns[0], groupBy, chartType, aggregation);
+        } else {
+            // Multiple Y columns - create multi-column chart
+            await runMultiColumnAnalysis(xCol, yColumns, chartType, aggregation);
+        }
     };
 }
 
 // ============= Dynamic Analysis =============
+
+async function runMultiColumnAnalysis(xCol, yColumns, chartType, aggregation) {
+    showLoadingScreen('جاري التحليل...' , 'تحليل أعمدة متعددة');
+    
+    try {
+        // Send requests for each Y column
+        const results = await Promise.all(
+            yColumns.map(yCol =>
+                fetch(`${API_BASE}/dynamic-analysis`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Session-Token': sessionToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        file_id: currentFileId,
+                        sheet: currentSheetName,
+                        x_column: xCol,
+                        y_column: yCol,
+                        group_by: null,
+                        chart_type: chartType,
+                        aggregation: aggregation
+                    })
+                }).then(r => {
+                    if (!r.ok) throw new Error(`Analysis failed for ${yCol}`);
+                    return r.json();
+                })
+            )
+        );
+        
+        // Combine results into single chart with multiple datasets
+        const combinedData = {
+            chart_type: chartType,
+            x_column: xCol,
+            y_columns: yColumns,
+            aggregation: aggregation,
+            labels: results[0].labels,
+            datasets: results.flatMap((result, idx) => 
+                result.datasets.map(ds => ({
+                    ...ds,
+                    label: yColumns[idx],
+                    backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'][idx % 6],
+                    borderColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'][idx % 6]
+                }))
+            )
+        };
+        
+        console.log('Combined multi-column data:', combinedData);
+        hideLoadingScreen();
+        renderDynamicChart(combinedData, chartType);
+        
+    } catch (error) {
+        console.error('Multi-column analysis error:', error);
+        showError('❌ خطأ في تحليل الأعمدة المتعددة: ' + error.message);
+        hideLoadingScreen();
+    }
+}
 
 async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
     showLoadingScreen('جاري التحليل...', 'الرجاء الانتظار');
