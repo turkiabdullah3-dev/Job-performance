@@ -1201,10 +1201,10 @@ def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_t
         df_clean = df_clean.dropna()
         logger.info(f"   After dropna: {len(df_clean)} rows")
         
-        # Convert y_column to numeric
-        df_clean[y_column] = pd.to_numeric(df_clean[y_column], errors='coerce')
+        # Convert y_column using custom rating conversion to handle strings and Arabic numerals
+        df_clean[y_column] = df_clean[y_column].apply(_convert_rating)
         df_clean = df_clean.dropna(subset=[y_column])
-        logger.info(f"   After numeric conversion: {len(df_clean)} rows")
+        logger.info(f"   After rating conversion: {len(df_clean)} rows")
         
         # If still no data, return empty structure
         if len(df_clean) == 0:

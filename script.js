@@ -1,35 +1,19 @@
-// Initialize
+
+// Initialize Session
 let sessionToken = null;
 let currentFileId = null;
 let currentSheetName = 'Sheet1';
 let availableColumns = [];
-let currentData = null;
+let progressInterval = null;
+let rawAnalyticsData = null;
+let serverAvailable = true;
 
-// API Configuration
+// Auto-detect API base URL for both local and production
 const API_BASE = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' 
-    ? 'http://127.0.0.1:8080' 
-    : 'https://job-performance.onrender.com';
+    ? '' 
+    : window.location.origin;
 
-// ============= Local Storage Management =============
-
-function saveToken(token) {
-    localStorage.setItem('sessionToken', token);
-}
-
-function getToken() {
-    return localStorage.getItem('sessionToken');
-}
-
-function clearToken() {
-    localStorage.removeItem('sessionToken');
-}
-
-function isLoggedIn() {
-    return !!getToken();
-}
-
-// ============= UI Functions =============
-
+// Loading screen
 function showLoadingScreen(text, subtext) {
     const screen = document.getElementById('loadingScreen');
     const textEl = document.getElementById('loadingText');
@@ -46,6 +30,7 @@ function hideLoadingScreen() {
     if (screen) screen.classList.remove('active');
 }
 
+// Error banner
 function showError(message, timeout) {
     try {
         hideLoadingScreen();
@@ -62,499 +47,757 @@ function showError(message, timeout) {
     } catch (e) { console.error('UI error:', e); }
 }
 
-// ============= Page Navigation =============
-
-function showLoginPage() {
-    const app = document.getElementById('app');
-    if (!app) return;
-    
-    app.innerHTML = `
-        <div style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #00855D 0%, #006B4A 50%, #1B4D3E 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        ">
-            <div style="
-                background: white;
-                border-radius: 20px;
-                padding: 50px 40px;
-                max-width: 400px;
-                width: 90%;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            ">
-                <div style="text-align: center; margin-bottom: 40px;">
-                    <i class="fas fa-lock" style="font-size: 50px; color: #00855D; margin-bottom: 15px;"></i>
-                    <h1 style="color: #1B4D3E; margin: 0; font-size: 28px;">تسجيل الدخول</h1>
-                    <p style="color: #4A5D56; margin: 10px 0 0 0;">نظام تحليل الأداء الوظيفي</p>
-                </div>
-                
-                <form id="login-form" style="display: flex; flex-direction: column; gap: 20px;">
-                    <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #1B4D3E;">
-                            <i class="fas fa-user"></i> اسم المستخدم
-                        </label>
-                        <input type="text" id="username-input" placeholder="أدخل اسم المستخدم" style="
-                            width: 100%;
-                            padding: 12px;
-                            border: 2px solid #D4E5DD;
-                            border-radius: 10px;
-                            font-family: 'Cairo', sans-serif;
-                            font-size: 14px;
-                        " autocomplete="username" required>
-                    </div>
-                    
-                    <div>
-                        <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #1B4D3E;">
-                            <i class="fas fa-key"></i> كلمة المرور
-                        </label>
-                        <input type="password" id="password-input" placeholder="أدخل كلمة المرور" style="
-                            width: 100%;
-                            padding: 12px;
-                            border: 2px solid #D4E5DD;
-                            border-radius: 10px;
-                            font-family: 'Cairo', sans-serif;
-                            font-size: 14px;
-                        " autocomplete="current-password" required>
-                    </div>
-                    
-                    <button type="submit" style="
-                        padding: 14px;
-                        background: #00855D;
-                        color: white;
-                        border: none;
-                        border-radius: 10px;
-                        font-family: 'Cairo', sans-serif;
-                        font-weight: 600;
-                        font-size: 15px;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    " onmouseover="this.style.background='#006B4A'" onmouseout="this.style.background='#00855D'">
-                        <i class="fas fa-sign-in-alt"></i> دخول
-                    </button>
-                </form>
-                
-                <p style="color: #4A5D56; font-size: 12px; text-align: center; margin-top: 20px;">
-                    <i class="fas fa-shield-alt"></i> هذا النظام محمي بكلمات مرور آمنة
-                </p>
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
+// Initialize session
+async function initSession() {
+    showLoadingScreen('جاري تهيئة الجلسة...', 'يرجى الانتظار');
+    try {
+        const response = await fetch(`${API_BASE}/init-session`, { 
+            method: 'GET', 
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Session init failed');
+        }
+        
+        const data = await response.json();
+        sessionToken = data.session_token;
+        hideLoadingScreen();
+        console.log('✓ Session initialized');
+    } catch (error) {
+        console.warn('Server not available, using demo mode:', error.message);
+        serverAvailable = false;
+        hideLoadingScreen();
+        showError('⚠️ الخادم غير متاح - جرب فتح http://127.0.0.1:8080', 10000);
+    }
 }
 
-function showDashboard() {
-    const app = document.getElementById('app');
-    if (!app) return;
-    
-    app.innerHTML = `
-        <!-- Loading Screen -->
-        <div id="loadingScreen">
-            <div class="loading-spinner"></div>
-            <div id="loadingText">جاري المعالجة...</div>
-            <div id="loadingSubtext">يرجى الانتظار</div>
-        </div>
-        
-        <!-- Error Banner -->
-        <div id="error-banner"></div>
-        
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <div class="header-title">
-                    <i class="fas fa-chart-bar"></i>
-                    <div>
-                        <h1>نظام تحليل الأداء الوظيفي</h1>
-                        <p>وزارة التعليم - المملكة العربية السعودية</p>
-                    </div>
-                </div>
-                <div class="header-actions">
-                    <span id="username-display" style="color: white; margin-right: 15px;"></span>
-                    <button class="btn btn-secondary" id="logout-btn">
-                        <i class="fas fa-sign-out-alt"></i> خروج
-                    </button>
-                </div>
-            </div>
-        </header>
-        
-        <!-- Main Container -->
-        <div class="container">
-            <!-- Upload Section -->
-            <div class="upload-section" onclick="document.getElementById('excel-file').click()">
-                <i class="fas fa-cloud-upload-alt"></i>
-                <h2>رفع ملف Excel</h2>
-                <p>اضغط أو اسحب ملف Excel للبدء في التحليل</p>
-                <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" />
-            </div>
-            
-            <!-- Chart Container -->
-            <div class="chart-container" id="chartContainer-wrapper">
-                <div class="chart-header">
-                    <i class="fas fa-chart-line"></i>
-                    <h2>التحليل الديناميكي</h2>
-                </div>
-                <div id="chartContainer"></div>
-                <div id="chartControls" class="chart-controls"></div>
-            </div>
-        </div>
-        
-        <!-- Footer -->
-        <div class="footer">
-            <p>© 2026 منظومة إدارة الأداء الوظيفي - جميع الحقوق محفوظة</p>
-        </div>
-    `;
-    
-    // Add event listeners
-    document.getElementById('excel-file').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) handleFileUpload(file);
-    });
-    
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
-    
-    // Update username display
-    checkAuthStatus();
-}
+// DOM ready - attach all event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM ready, initializing...');
+    initSession();
+    attachEventListeners();
+});
 
-// ============= Authentication =============
-
-async function handleLogin(e) {
-    e.preventDefault();
-    
-    const username = document.getElementById('username-input').value.trim();
-    const password = document.getElementById('password-input').value.trim();
-    
-    if (!username || !password) {
-        showError('❌ يرجى إدخال اسم المستخدم وكلمة المرور');
+function attachEventListeners() {
+    const fileInput = document.getElementById('excel-file');
+    if (!fileInput) {
+        console.error('File input not found');
+        showError('عنصر الملف غير موجود');
         return;
     }
     
-    showLoadingScreen('جاري التحقق...', 'يرجى الانتظار');
-    
-    try {
-        const response = await fetch(`${API_BASE}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
         
-        const data = await response.json();
-        
-        if (!response.ok) {
-            hideLoadingScreen();
-            showError(`❌ ${data.error || 'فشل تسجيل الدخول'}`);
+        if (!serverAvailable) {
+            showError('⚠️ الخادم لا يستجيب. تأكد من تشغيل:\npython3 app.py');
             return;
         }
         
-        sessionToken = data.session_token;
-        saveToken(sessionToken);
+        showLoadingScreen('جاري رفع الملف...', file.name);
         
-        hideLoadingScreen();
-        showDashboard();
+        const formData = new FormData();
+        formData.append('file', file);
         
-    } catch (error) {
-        hideLoadingScreen();
-        showError(`❌ خطأ في الاتصال: ${error.message}`);
-    }
-}
-
-async function handleLogout() {
-    showLoadingScreen('جاري تسجيل الخروج...', 'يرجى الانتظار');
-    
-    try {
-        await fetch(`${API_BASE}/logout`, {
-            method: 'POST',
-            headers: { 'X-Session-Token': sessionToken }
-        });
-    } catch (e) {
-        console.log('Logout request failed, clearing local token');
-    }
-    
-    sessionToken = null;
-    clearToken();
-    hideLoadingScreen();
-    showLoginPage();
-}
-
-async function checkAuthStatus() {
-    try {
-        const response = await fetch(`${API_BASE}/auth-check`, {
-            method: 'GET',
-            headers: { 'X-Session-Token': sessionToken }
-        });
-        
-        if (response.ok) {
+        try {
+        const response = await fetch(`${API_BASE}/upload`, { 
+                method: 'POST', 
+                body: formData, 
+                headers: { 'X-Session-Token': sessionToken } 
+            });
+            
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+            
             const data = await response.json();
-            const usernameDisplay = document.getElementById('username-display');
-            if (usernameDisplay) {
-                usernameDisplay.textContent = `مرحباً ${data.username} 👋`;
+            
+            if (data.success) {
+                currentFileId = data.file_id;
+                currentSheetName = data.sheets[0] || 'Sheet1';
+                hideLoadingScreen();
+                // جلب الأعمدة وعرض نافذة الاختيار
+                showColumnSelectionModal(currentSheetName);
+            } else {
+                throw new Error(data.error || 'Upload failed');
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            showError('خطأ في الرفع: ' + error.message);
+            hideLoadingScreen();
+        }
+    });
+    
+    // Clear button
+    const clearBtn = document.getElementById('clear-data');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', clearData);
+    }
+    
+    // Filter buttons
+    const applyFiltersBtn = document.getElementById('apply-filters');
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', applyFilters);
+    }
+    
+    const resetFiltersBtn = document.getElementById('reset-filters');
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', resetFilters);
+    }
+}
+
+// Load analytics
+async function loadAnalyticsForSheet(sheetName) {
+    showLoadingScreen('جاري تحميل النتائج...', 'الرجاء الانتظار');
+    let retries = 0;
+    const maxRetries = 20;
+    
+    async function fetchAnalytics() {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 120000);
+            
+            const response = await fetch(`${API_BASE}/analytics`, {
+                method: 'POST',
+                headers: { 
+                    'X-Session-Token': sessionToken, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ 
+                    file_id: currentFileId, 
+                    sheet: sheetName 
+                }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeout);
+            
+            if (response.status === 202) {
+                if (retries < maxRetries) { 
+                    retries++; 
+                    await new Promise(r => setTimeout(r, 1500)); 
+                    return fetchAnalytics(); 
+                } else {
+                    throw new Error('تجاوز زمن المعالجة');
+                }
+            }
+            
+            if (!response.ok) {
+                throw new Error('Analytics failed: ' + response.status);
+            }
+            
+            const data = await response.json();
+            renderDashboard(data);
+            
+        } catch (error) {
+            hideLoadingScreen();
+            if (error.name === 'AbortError') {
+                showError('انتهت مهلة الانتظار');
+            } else {
+                showError('خطأ: ' + error.message);
             }
         }
-    } catch (e) {
-        console.error('Auth check failed:', e);
+    }
+    
+    fetchAnalytics();
+}
+
+// Render dashboard
+function renderDashboard(data) {
+    try {
+        hideLoadingScreen();
+        
+        // Show sections
+        const statsSection = document.getElementById('statsSection');
+        const chartsSection = document.getElementById('chartsSection');
+        const citiesChartSection = document.getElementById('citiesChartSection');
+        const filtersSection = document.getElementById('filtersSection');
+        
+        if (statsSection) statsSection.style.display = 'grid';
+        if (chartsSection) chartsSection.style.display = 'block';
+        if (citiesChartSection) citiesChartSection.style.display = 'block';
+        if (filtersSection) filtersSection.style.display = 'block';
+        
+        // Stats
+        if (data.total_records) {
+            const totalEl = document.getElementById('total-records');
+            const validEl = document.getElementById('valid-ratings');
+            const avgEl = document.getElementById('avg-rating');
+            
+            if (totalEl) totalEl.textContent = data.total_records.toLocaleString('ar-SA');
+            if (validEl) validEl.textContent = data.valid_ratings.toLocaleString('ar-SA');
+            if (avgEl) avgEl.textContent = data.avg_rating.toFixed(2);
+        }
+        
+        // Charts
+        if (data.top_departments && data.top_departments.length > 0) {
+            renderDepartmentsChart(data.top_departments);
+            renderRatingsDistribution(data.top_departments);
+            renderEmployeesByDept(data.top_departments);
+            renderPerformanceComparison(data.top_departments);
+            renderCitiesChart(data.top_departments);
+        }
+        
+        rawAnalyticsData = data;
+        populateFilters(data);
+        
+        console.log('✓ Dashboard rendered successfully');
+        
+    } catch (error) {
+        console.error('Dashboard render error:', error);
+        showError('خطأ: ' + error.message);
     }
 }
 
-// ============= File Upload =============
+// Charts
+function renderDepartmentsChart(depts) {
+    const ctx = document.getElementById('departmentsChart');
+    if (!ctx) return;
+    
+    const names = depts.map(d => d.name);
+    const ratings = depts.map(d => d.rating);
+    
+    if (window.deptChart) window.deptChart.destroy();
+    
+    window.deptChart = new Chart(ctx, {
+        type: 'bar',
+        data: { 
+            labels: names, 
+            datasets: [{ 
+                label: 'التقييم', 
+                data: ratings, 
+                backgroundColor: 'rgba(0, 133, 93, 0.8)', 
+                borderColor: '#00855D', 
+                borderWidth: 2 
+            }] 
+        },
+        options: { 
+            indexAxis: 'y', 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { 
+                x: { 
+                    beginAtZero: true, 
+                    max: 5, 
+                    grid: { color: 'rgba(0,0,0,0.05)' } 
+                }, 
+                y: { 
+                    grid: { display: false } 
+                } 
+            }, 
+            plugins: { 
+                legend: { display: false } 
+            } 
+        }
+    });
+}
 
-async function handleFileUpload(file) {
-    if (!sessionToken) {
-        showError('❌ لم تقم بتسجيل الدخول');
-        return;
+function renderRatingsDistribution(depts) {
+    const ctx = document.getElementById('ratingsDistribution');
+    if (!ctx) return;
+    
+    const buckets = { 'ممتاز': 0, 'جيد جداً': 0, 'جيد': 0, 'مقبول': 0, 'ضعيف': 0 };
+    
+    depts.forEach(d => {
+        if (d.rating >= 5.0) buckets['ممتاز'] += d.employees;
+        else if (d.rating >= 4.0) buckets['جيد جداً'] += d.employees;
+        else if (d.rating >= 3.0) buckets['جيد'] += d.employees;
+        else if (d.rating >= 2.0) buckets['مقبول'] += d.employees;
+        else buckets['ضعيف'] += d.employees;
+    });
+    
+    if (window.ratingsChart) window.ratingsChart.destroy();
+    
+    window.ratingsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: { 
+            labels: Object.keys(buckets), 
+            datasets: [{ 
+                data: Object.values(buckets), 
+                backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935'], 
+                borderWidth: 3, 
+                borderColor: '#fff' 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { 
+                    position: 'bottom', 
+                    labels: { padding: 10 } 
+                } 
+            } 
+        }
+    });
+}
+
+function renderEmployeesByDept(depts) {
+    const ctx = document.getElementById('employeesByDept');
+    if (!ctx) return;
+    
+    const names = depts.map(d => d.name);
+    const employees = depts.map(d => d.employees);
+    
+    if (window.empChart) window.empChart.destroy();
+    
+    window.empChart = new Chart(ctx, {
+        type: 'bar',
+        data: { 
+            labels: names, 
+            datasets: [{ 
+                label: 'الموظفين', 
+                data: employees, 
+                backgroundColor: 'rgba(184, 134, 11, 0.8)', 
+                borderColor: '#B8860B', 
+                borderWidth: 2 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { 
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: 'rgba(0,0,0,0.05)' } 
+                }, 
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { maxRotation: 45 } 
+                } 
+            }, 
+            plugins: { 
+                legend: { display: false } 
+            } 
+        }
+    });
+}
+
+function renderPerformanceComparison(depts) {
+    const ctx = document.getElementById('performanceComparison');
+    if (!ctx) return;
+    
+    if (window.perfChart) window.perfChart.destroy();
+    
+    window.perfChart = new Chart(ctx, {
+        type: 'scatter',
+        data: { 
+            datasets: [{ 
+                label: 'الأقسام', 
+                data: depts.map(d => ({ x: d.employees, y: d.rating })), 
+                backgroundColor: 'rgba(255, 193, 7, 0.8)', 
+                borderColor: '#ffc107', 
+                borderWidth: 2, 
+                pointRadius: 10 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { 
+                x: { 
+                    title: { display: true, text: 'الموظفين' }, 
+                    grid: { color: 'rgba(0,0,0,0.05)' } 
+                }, 
+                y: { 
+                    title: { display: true, text: 'التقييم' }, 
+                    beginAtZero: true, 
+                    max: 5, 
+                    grid: { color: 'rgba(0,0,0,0.05)' } 
+                } 
+            }, 
+            plugins: { 
+                legend: { display: false }
+            } 
+        }
+    });
+}
+
+// Cities Chart - أداء المدن
+function renderCitiesChart(depts) {
+    const ctx = document.getElementById('citiesChart');
+    if (!ctx) return;
+    
+    // Group by city (extract city from department name)
+    const cityData = {};
+    depts.forEach(d => {
+        const city = extractCityFromName(d.name) || 'أخرى';
+        if (!cityData[city]) {
+            cityData[city] = { totalRating: 0, count: 0, employees: 0 };
+        }
+        cityData[city].totalRating += d.rating * d.employees;
+        cityData[city].count += 1;
+        cityData[city].employees += d.employees;
+    });
+    
+    const cities = Object.keys(cityData);
+    const avgRatings = cities.map(c => cityData[c].totalRating / cityData[c].employees);
+    const employees = cities.map(c => cityData[c].employees);
+    
+    if (window.citiesChart) window.citiesChart.destroy();
+    
+    window.citiesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: cities,
+            datasets: [
+                {
+                    label: 'متوسط التقييم',
+                    data: avgRatings,
+                    backgroundColor: 'rgba(0, 133, 93, 0.8)',
+                    borderColor: '#00855D',
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'عدد الموظفين',
+                    data: employees,
+                    backgroundColor: 'rgba(184, 134, 11, 0.8)',
+                    borderColor: '#B8860B',
+                    borderWidth: 2,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: 'التقييم', color: '#00855D' },
+                    beginAtZero: true,
+                    max: 5,
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: 'الموظفين', color: '#B8860B' },
+                    beginAtZero: true,
+                    grid: { display: false }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45 }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+// Helper to extract city name from department name
+function extractCityFromName(name) {
+    if (!name) return null;
+    
+    const saudiCities = [
+        'الرياض', 'جدة', 'مكة', 'المدينة', 'الدمام', 'الخبر', 'الظهران',
+        'تبوك', 'أبها', 'خميس مشيط', 'جازان', 'ينبع', 'الطائف', 'عرعر',
+        'سكاكا', 'حفر الباطن', 'الجبيل', 'القطيف', 'نجران', 'الباحة',
+        'رابغ', 'المدينة المنورة', 'مكة المكرمة'
+    ];
+    
+    for (const city of saudiCities) {
+        if (name.includes(city)) return city;
     }
-    
-    showLoadingScreen('جاري رفع الملف...', file.name);
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
+    return null;
+}
+
+// Clear data
+async function clearData() {
     try {
-        const response = await fetch(`${API_BASE}/upload`, { 
-            method: 'POST', 
-            body: formData, 
+        const response = await fetch(`${API_BASE}/clear`, { 
+            method: 'POST',
             headers: { 'X-Session-Token': sessionToken } 
         });
         
-        console.log('Upload response status:', response.status);
-        
-        if (response.status === 401) {
-            // Session expired or invalid - clear and redirect to login
-            console.warn('Session invalid - redirecting to login');
-            clearToken();
-            sessionToken = null;
-            hideLoadingScreen();
-            showError('❌ انتهت جلسة المستخدم - يرجى تسجيل الدخول مرة أخرى');
-            setTimeout(() => showLoginPage(), 2000);
-            return;
+        if (response.ok) {
+            currentFileId = null;
+            rawAnalyticsData = null;
+            document.getElementById('excel-file').value = '';
+            
+            ['statsSection', 'chartsSection', 'citiesChartSection', 'filtersSection'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            
+            ['total-records', 'valid-ratings', 'avg-rating'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '-';
+            });
+            
+            ['deptChart', 'ratingsChart', 'empChart', 'perfChart', 'citiesChart'].forEach(chart => {
+                if (window[chart]) { window[chart].destroy(); window[chart] = null; }
+            });
+            
+            showError('✓ تم مسح البيانات', 3000);
         }
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Upload error response:', errorData);
-            throw new Error(errorData.error || 'Upload failed');
-        }
-        
-        const data = await response.json();
-        console.log('Upload success response:', data);
-        
-        if (data.success && data.columns) {
-            currentFileId = data.file_id;
-            currentSheetName = data.sheets[0] || 'Sheet1';
-            hideLoadingScreen();
-            showChartBuilderModal(data.columns);
-        } else {
-            throw new Error(data.error || 'Upload returned invalid data');
-        }
-    } catch (error) {
-        console.error('Upload error:', error);
-        hideLoadingScreen();
-        showError('❌ خطأ في الرفع: ' + error.message);
+    } catch (error) { 
+        showError('حدث خطأ: ' + error.message, 3000); 
     }
 }
 
-// ============= Chart Builder Modal =============
-
-function showChartBuilderModal(columns) {
-    console.log('🚀 showChartBuilderModal called with:', columns);
+// Populate filters
+function populateFilters(data) {
+    const deptSelect = document.getElementById('filter-department');
+    const regionSelect = document.getElementById('filter-region-main');
     
-    // Validate columns
-    if (!Array.isArray(columns) || columns.length === 0) {
-        showError('❌ لا توجد أعمدة متاحة في الملف');
-        console.error('Invalid columns array:', columns);
-        return;
+    if (deptSelect) {
+        deptSelect.innerHTML = '<option value="">الكل</option>';
+        if (data.top_departments) {
+            data.top_departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.name;
+                option.textContent = dept.name;
+                deptSelect.appendChild(option);
+            });
+        }
     }
     
-    // Check if columns is array of objects (with type info) or strings
-    const isColumnInfo = columns.length > 0 && typeof columns[0] === 'object';
-    const columnNames = isColumnInfo ? columns.map(c => c.name) : columns;
-    const numericColumns = isColumnInfo ? columns.filter(c => c.is_numeric === 1 || c.is_numeric === true).map(c => c.name) : columnNames;
+    if (regionSelect) {
+        regionSelect.innerHTML = '<option value="">جميع المناطق</option>';
+        // Add unique regions from department names
+        const cities = new Set();
+        if (data.top_departments) {
+            data.top_departments.forEach(dept => {
+                const city = extractCityFromName(dept.name);
+                if (city) cities.add(city);
+            });
+        }
+        Array.from(cities).sort().forEach(city => {
+            const option = document.createElement('option');
+            option.value = city;
+            option.textContent = city;
+            regionSelect.appendChild(option);
+        });
+    }
+}
+
+// Apply filters
+function applyFilters() {
+    if (!rawAnalyticsData) { 
+        showError('لا توجد بيانات', 3000); 
+        return; 
+    }
     
-    console.log('📊 Column info:', { isColumnInfo, columnNames, numericColumns });
+    const regionMain = document.getElementById('filter-region-main').value;
+    const department = document.getElementById('filter-department').value;
+    const ratingMin = parseFloat(document.getElementById('filter-rating-min').value) || 0;
+    const ratingMax = parseFloat(document.getElementById('filter-rating-max').value) || 5;
     
-    const existingModal = document.getElementById('chart-builder-modal');
+    let filteredDepts = rawAnalyticsData.top_departments || [];
+    
+    // Apply region filter
+    if (regionMain) {
+        filteredDepts = filteredDepts.filter(d => extractCityFromName(d.name) === regionMain);
+    }
+    
+    // Apply department filter
+    if (department) {
+        filteredDepts = filteredDepts.filter(d => d.name === department);
+    }
+    
+    // Apply rating filter
+    filteredDepts = filteredDepts.filter(d => d.rating >= ratingMin && d.rating <= ratingMax);
+    
+    // Calculate stats
+    const totalEmployees = filteredDepts.reduce((sum, d) => sum + d.employees, 0);
+    const avgRating = filteredDepts.length > 0 ? filteredDepts.reduce((sum, d) => sum + (d.rating * d.employees), 0) / totalEmployees : 0;
+    
+    document.getElementById('total-records').textContent = totalEmployees.toLocaleString();
+    document.getElementById('valid-ratings').textContent = totalEmployees.toLocaleString();
+    document.getElementById('avg-rating').textContent = avgRating.toFixed(2);
+    
+    renderDepartmentsChart(filteredDepts);
+    renderRatingsDistribution(filteredDepts);
+    renderEmployeesByDept(filteredDepts);
+    renderPerformanceComparison(filteredDepts);
+    renderCitiesChart(filteredDepts);
+    
+    showError('✓ تم تطبيق الفلاتر', 2000);
+}
+
+// Reset filters
+function resetFilters() {
+    document.getElementById('filter-region-main').selectedIndex = 0;
+    document.getElementById('filter-department').selectedIndex = 0;
+    document.getElementById('filter-city').selectedIndex = 0;
+    document.getElementById('filter-rating-min').value = '';
+    document.getElementById('filter-rating-max').value = '';
+    
+    if (rawAnalyticsData) {
+        document.getElementById('total-records').textContent = rawAnalyticsData.total_records.toLocaleString();
+        document.getElementById('valid-ratings').textContent = rawAnalyticsData.valid_ratings.toLocaleString();
+        document.getElementById('avg-rating').textContent = rawAnalyticsData.avg_rating.toFixed(2);
+        renderDepartmentsChart(rawAnalyticsData.top_departments);
+        renderRatingsDistribution(rawAnalyticsData.top_departments);
+        renderEmployeesByDept(rawAnalyticsData.top_departments);
+        renderPerformanceComparison(rawAnalyticsData.top_departments);
+        renderCitiesChart(rawAnalyticsData.top_departments);
+        showError('✓ تم إعادة تعيين', 2000);
+    }
+}
+
+// نافذة اختيار الأعمدة
+async function showColumnSelectionModal(sheetName) {
+    try {
+        showLoadingScreen('جاري جلب الأعمدة...', '');
+        
+        const response = await fetch(`${API_BASE}/get-columns`, {
+            method: 'POST',
+            headers: {
+                'X-Session-Token': sessionToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                file_id: currentFileId,
+                sheet: sheetName
+            })
+        });
+        
+        hideLoadingScreen();
+        
+        if (!response.ok) {
+            throw new Error('Failed to get columns');
+        }
+        
+        const data = await response.json();
+        availableColumns = data.columns || [];
+        
+        // إنشاء نافذة الاختيار
+        createColumnSelectionUI(availableColumns);
+        
+    } catch (error) {
+        console.error('Error getting columns:', error);
+        showError('خطأ في جلب الأعمدة: ' + error.message);
+    }
+}
+
+function createColumnSelectionUI(columns) {
+    // إزالة نافذة قديمة إن وجدت
+    const existingModal = document.getElementById('column-modal');
     if (existingModal) existingModal.remove();
     
+    // إنشاء النافذة
     const modal = document.createElement('div');
-    modal.id = 'chart-builder-modal';
+    modal.id = 'column-modal';
     modal.style.cssText = `
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.7);
+        background: rgba(0,0,0,0.6);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 10000;
-        overflow-y: auto;
     `;
     
     const content = document.createElement('div');
     content.style.cssText = `
-        background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
-        border-radius: 20px;
-        padding: 40px;
-        max-width: 650px;
+        background: white;
+        border-radius: 16px;
+        padding: 30px;
+        max-width: 550px;
         width: 90%;
-        margin: 20px auto;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        max-height: 80vh;
+        overflow-y: auto;
     `;
     
-    // Build column options HTML with info badges
-    const buildColumnOption = (colName) => {
-        const colInfo = isColumnInfo ? columns.find(c => c.name === colName) : null;
-        const isNumeric = colInfo?.is_numeric || false;
-        const numericPct = colInfo?.numeric_percentage || 0;
-        const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px; margin-right: 8px;">${numericPct}% رقمي</span>` : '';
-        return `<option value="${colName}">${colName} ${badge}</option>`;
-    };
-    
     content.innerHTML = `
-        <div style="text-align: center; margin-bottom: 30px;">
-            <h2 style="color: #00855D; margin: 0; font-size: 28px;">
-                <i class="fas fa-chart-bar"></i> بناء رسم بياني
-            </h2>
-            <p style="color: #666; margin: 10px 0 0 0;">اختر الأعمدة والخيارات لإنشاء رسم بياني مخصص</p>
-            ${numericColumns.length < columnNames.length ? `<p style="color: #ff9800; margin: 10px 0 0 0; font-size: 12px;"><i class="fas fa-info-circle"></i> ⚠️ بعض الأعمدة تحتوي على نصوص</p>` : ''}
-        </div>
+        <h2 style="color: #00855D; margin-bottom: 20px; text-align: center;">
+            <i class="fas fa-columns"></i> اختيار الأعمدة للتحليل
+        </h2>
+        <p style="color: #666; margin-bottom: 20px; text-align: center;">
+            يمكنك اختيار أكثر من عمود تقييم للمقارنة
+        </p>
         
-        <div style="margin-bottom: 25px;">
-            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                <i class="fas fa-arrows-alt-h"></i> المحور الأفقي (X):
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-weight: bold; margin-bottom: 8px; color: #1B4D3E;">
+                <i class="fas fa-building"></i> عمود الإدارة/القسم:
             </label>
-            <select id="x-column-select" style="
+            <select id="dept-column-select" style="
                 width: 100%;
                 padding: 12px;
                 border: 2px solid #D4E5DD;
                 border-radius: 10px;
                 font-family: 'Cairo', sans-serif;
                 font-size: 14px;
-                background: white;
             ">
                 <option value="">-- اختر العمود --</option>
-                ${columnNames.map(col => `<option value="${col}">${col}</option>`).join('')}
+                ${columns.map(col => `<option value="${col}">${col}</option>`).join('')}
             </select>
         </div>
-            
-        <div style="margin-bottom: 25px;">
-            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                <i class="fas fa-arrows-alt-v"></i> الأعمدة المراد عرضها (Y) - اختر أعمدة رقمية:
-            </label>
-            <div id="y-columns-container" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; background: white;">
-                ${columnNames.map(col => {
-                    const colInfo = isColumnInfo ? columns.find(c => c.name === col) : null;
-                    const isNumeric = colInfo && (colInfo.is_numeric === 1 || colInfo.is_numeric === true);
-                    const numericPct = colInfo?.numeric_percentage || 0;
-                    const style = !isNumeric ? 'opacity: 0.5;' : '';
-                    const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px;">${numericPct}%</span>` : '<span style="font-size: 10px; background: #ccc; color: #666; padding: 2px 6px; border-radius: 3px;">نص</span>';
-                    return `
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.2s; ${style}">
-                            <input type="checkbox" value="${col}" ${!isNumeric ? 'disabled' : ''} style="width: 16px; height: 16px; accent-color: #00855D;">
-                            <span style="font-family: 'Cairo', sans-serif; flex: 1;">${col}</span>
-                            ${badge}
-                        </label>
-                    `;
-                }).join('')}
-            </div>
-        </div>
         
-        <div style="margin-bottom: 25px;">
-            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                <i class="fas fa-layer-group"></i> تجميع حسب (اختياري):
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: bold; margin-bottom: 10px; color: #1B4D3E;">
+                <i class="fas fa-star"></i> أعمدة التقييم (اختر واحد أو أكثر):
             </label>
-            <select id="group-by-select" style="
-                width: 100%;
-                padding: 12px;
+            <div id="rating-columns-checkboxes" style="
+                max-height: 200px;
+                overflow-y: auto;
                 border: 2px solid #D4E5DD;
                 border-radius: 10px;
-                font-family: 'Cairo', sans-serif;
-                font-size: 14px;
-                background: white;
+                padding: 10px;
             ">
-                <option value="">-- بدون تجميع --</option>
-                ${columnNames.map(col => `<option value="${col}">${col}</option>`).join('')}
-            </select>
-        </div>
-        
-        <div style="margin-bottom: 25px;">
-            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                <i class="fas fa-palette"></i> نوع الرسم البياني:
-            </label>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; cursor: pointer; background: white;">
-                    <input type="radio" name="chart-type" value="bar" checked style="width: 18px; height: 18px; accent-color: #00855D;">
-                    <span style="font-family: 'Cairo', sans-serif; font-weight: 500;">📊 أعمدة</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; cursor: pointer; background: white;">
-                    <input type="radio" name="chart-type" value="line" style="width: 18px; height: 18px; accent-color: #00855D;">
-                    <span style="font-family: 'Cairo', sans-serif; font-weight: 500;">📈 خطوط</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; cursor: pointer; background: white;">
-                    <input type="radio" name="chart-type" value="pie" style="width: 18px; height: 18px; accent-color: #00855D;">
-                    <span style="font-family: 'Cairo', sans-serif; font-weight: 500;">🥧 دائرة</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; cursor: pointer; background: white;">
-                    <input type="radio" name="chart-type" value="scatter" style="width: 18px; height: 18px; accent-color: #00855D;">
-                    <span style="font-family: 'Cairo', sans-serif; font-weight: 500;">⚫ نقاط</span>
-                </label>
+                ${columns.map((col, idx) => `
+                    <label style="
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 8px;
+                        cursor: pointer;
+                        border-radius: 6px;
+                        transition: background 0.2s;
+                    " onmouseover="this.style.background='#E8F5E9'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" 
+                            class="rating-col-checkbox" 
+                            value="${col}" 
+                            style="width: 18px; height: 18px; accent-color: #00855D;"
+                            ${idx === 0 ? 'checked' : ''}>
+                        <span style="font-family: 'Cairo', sans-serif;">${col}</span>
+                    </label>
+                `).join('')}
             </div>
-        </div>
-        
-        <div style="margin-bottom: 30px;">
-            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                <i class="fas fa-calculator"></i> طريقة التجميع:
-            </label>
-            <select id="aggregation-select" style="
-                width: 100%;
-                padding: 12px;
-                border: 2px solid #D4E5DD;
-                border-radius: 10px;
-                font-family: 'Cairo', sans-serif;
-                font-size: 14px;
-                background: white;
-            ">
-                <option value="avg" selected>متوسط (Average)</option>
-                <option value="sum">المجموع (Sum)</option>
-                <option value="count">العدد (Count)</option>
-                <option value="max">الأقصى (Max)</option>
-                <option value="min">الأدنى (Min)</option>
-            </select>
+            <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                <i class="fas fa-info-circle"></i> يمكنك تحديد عدة أعمدة للمقارنة
+            </p>
         </div>
         
         <div style="display: flex; gap: 10px; justify-content: center;">
-            <button id="cancel-chart-builder-btn" style="
-                padding: 14px 28px;
+            <button id="cancel-columns-btn" style="
+                padding: 12px 24px;
                 background: #E8F5E9;
                 color: #1B4D3E;
                 border: none;
                 border-radius: 10px;
                 font-family: 'Cairo', sans-serif;
                 font-weight: 600;
-                font-size: 15px;
                 cursor: pointer;
             ">
                 <i class="fas fa-times"></i> إلغاء
             </button>
-            <button id="create-chart-btn" style="
-                padding: 14px 28px;
+            <button id="confirm-columns-btn" style="
+                padding: 12px 24px;
                 background: #00855D;
                 color: white;
                 border: none;
                 border-radius: 10px;
                 font-family: 'Cairo', sans-serif;
                 font-weight: 600;
-                font-size: 15px;
                 cursor: pointer;
             ">
-                <i class="fas fa-chart-line"></i> إنشاء الرسم البياني
+                <i class="fas fa-check"></i> تحليل
             </button>
         </div>
     `;
@@ -562,149 +805,36 @@ function showChartBuilderModal(columns) {
     modal.appendChild(content);
     document.body.appendChild(modal);
     
-    document.getElementById('cancel-chart-builder-btn').onclick = () => {
+    // أحداث الأزرار
+    document.getElementById('cancel-columns-btn').onclick = () => {
         modal.remove();
         currentFileId = null;
         document.getElementById('excel-file').value = '';
     };
     
-    document.getElementById('create-chart-btn').onclick = async () => {
-        const xCol = document.getElementById('x-column-select').value;
-        const yCheckboxes = Array.from(document.querySelectorAll('#y-columns-container input[type="checkbox"]:checked'));
-        const yColumns = yCheckboxes.map(cb => cb.value);
-        const groupBy = document.getElementById('group-by-select').value || null;
-        const chartType = document.querySelector('input[name="chart-type"]:checked').value;
-        const aggregation = document.getElementById('aggregation-select').value;
+    document.getElementById('confirm-columns-btn').onclick = () => {
+        const deptCol = document.getElementById('dept-column-select').value;
         
-        // Validation
-        if (!xCol) {
-            showError('❌ يرجى اختيار المحور الأفقي (X)');
-            return;
-        }
+        // جلب الأعمدة المحددة
+        const ratingCheckboxes = document.querySelectorAll('.rating-col-checkbox:checked');
+        const ratingCols = Array.from(ratingCheckboxes).map(cb => cb.value);
         
-        if (yColumns.length === 0) {
-            showError('❌ يرجى اختيار عمود واحد على الأقل للمحور العمودي (Y)\n💡 تأكد من اختيار أعمدة رقمية (بها نسبة أعلى من 0%)');
-            return;
-        }
-        
-        // Check for numeric data
-        const disabledCheckboxes = yCheckboxes.filter(cb => cb.disabled);
-        if (disabledCheckboxes.length > 0) {
-            const textColumns = disabledCheckboxes.map(cb => cb.value);
-            showError(`⚠️ الأعمدة المختارة تحتوي على نصوص: ${textColumns.join(', ')}\nاختر أعمدة رقمية فقط`);
+        if (!deptCol || ratingCols.length === 0) {
+            showError('الرجاء اختيار القسم وعمود تقييم واحد على الأقل');
             return;
         }
         
         modal.remove();
-        
-        // If single Y column, use old flow
-        if (yColumns.length === 1) {
-            await runDynamicAnalysis(xCol, yColumns[0], groupBy, chartType, aggregation);
-        } else {
-            // Multiple Y columns - create multi-column chart
-            await runMultiColumnAnalysis(xCol, yColumns, chartType, aggregation);
-        }
+        runCustomAnalysis(deptCol, ratingCols);
     };
 }
 
-// ============= Dynamic Analysis =============
-
-async function runMultiColumnAnalysis(xCol, yColumns, chartType, aggregation) {
-    showLoadingScreen('جاري التحليل...' , 'تحليل أعمدة متعددة');
-    
-    try {
-        // Send requests for each Y column - handle failures gracefully
-        const promises = yColumns.map(yCol =>
-            fetch(`${API_BASE}/dynamic-analysis`, {
-                method: 'POST',
-                headers: {
-                    'X-Session-Token': sessionToken,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    file_id: currentFileId,
-                    sheet: currentSheetName,
-                    x_column: xCol,
-                    y_column: yCol,
-                    group_by: null,
-                    chart_type: chartType,
-                    aggregation: aggregation
-                })
-            }).then(async r => {
-                if (r.status === 401) {
-                    clearToken();
-                    sessionToken = null;
-                    throw new Error('انتهت جلسة المستخدم - يرجى تسجيل الدخول مرة أخرى');
-                }
-                const data = await r.json();
-                if (!r.ok) {
-                    console.error(`❌ Failed for ${yCol}:`, data.error);
-                    throw new Error(data.error || `Analysis failed for ${yCol}`);
-                }
-                console.log(`✅ Loaded ${yCol}:`, data.labels?.length || 0, 'labels');
-                return { success: true, yColumn: yCol, data };
-            }).catch(err => {
-                console.error(`Error for ${yCol}:`, err.message);
-                return { success: false, yColumn: yCol, error: err.message };
-            })
-        );
-        
-        const results = await Promise.all(promises);
-        console.log('Multi-column results:', results);
-        
-        // Filter successful results
-        const successfulResults = results.filter(r => r.success);
-        
-        if (successfulResults.length === 0) {
-            throw new Error('فشل تحليل جميع الأعمدة: ' + results.map(r => r.error).join(', '));
-        }
-        
-        if (successfulResults.length < yColumns.length) {
-            const failedColumns = results.filter(r => !r.success).map(r => r.yColumn).join(', ');
-            showError(`⚠️ فشل تحليل الأعمدة: ${failedColumns}. سيتم عرض الأعمدة الأخرى.`);
-        }
-        
-        // Get labels from first successful result
-        const labels = successfulResults[0].data.labels;
-        
-        if (!Array.isArray(labels) || labels.length === 0) {
-            throw new Error('لا توجد تسميات في البيانات');
-        }
-        
-        // Combine results into single chart with multiple datasets
-        const combinedData = {
-            chart_type: chartType,
-            x_column: xCol,
-            y_columns: successfulResults.map(r => r.yColumn),
-            aggregation: aggregation,
-            labels: labels,
-            datasets: successfulResults.flatMap((result, idx) => {
-                const data = result.data;
-                return (data.datasets || []).map(ds => ({
-                    ...ds,
-                    label: result.yColumn,
-                    backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'][idx % 6],
-                    borderColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'][idx % 6]
-                }))
-            })
-        };
-        
-        console.log('Combined multi-column data:', combinedData);
-        hideLoadingScreen();
-        renderDynamicChart(combinedData, chartType);
-        
-    } catch (error) {
-        console.error('Multi-column analysis error:', error);
-        showError('❌ خطأ في تحليل الأعمدة المتعددة: ' + error.message);
-        hideLoadingScreen();
-    }
-}
-
-async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
+// تشغيل التحليل بالأعمدة المحددة
+async function runCustomAnalysis(deptCol, ratingCols) {
     showLoadingScreen('جاري التحليل...', 'الرجاء الانتظار');
     
     try {
-        const response = await fetch(`${API_BASE}/dynamic-analysis`, {
+        const response = await fetch(`${API_BASE}/analyze-custom`, {
             method: 'POST',
             headers: {
                 'X-Session-Token': sessionToken,
@@ -713,124 +843,23 @@ async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
             body: JSON.stringify({
                 file_id: currentFileId,
                 sheet: currentSheetName,
-                x_column: xCol,
-                y_column: yCol,
-                group_by: groupBy,
-                chart_type: chartType,
-                aggregation: aggregation
+                dept_column: deptCol,
+                rating_columns: ratingCols
             })
         });
         
-        if (response.status === 401) {
-            clearToken();
-            sessionToken = null;
-            throw new Error('انتهت جلسة المستخدم - يرجى تسجيل الدخول مرة أخرى');
-        }
-        
         if (!response.ok) {
-            throw new Error('Analysis failed: ' + response.status);
+            throw new Error('Analysis failed');
         }
         
         const data = await response.json();
-        
-        // Diagnostic logging
-        console.log('API response:', data);
-        
-        // Validate data structure
-        if (!data || typeof data !== 'object') {
-            throw new Error('البيانات المستلمة غير صالحة');
-        }
-        
-        if (!Array.isArray(data.labels)) {
-            console.error('❌ Missing labels:', data.labels);
-            throw new Error(`لا توجد تسميات في البيانات - Response: ${JSON.stringify(data)}`);
-        }
-        
-        if (data.labels.length === 0) {
-            throw new Error('البيانات فارغة - تحقق من اختيار الأعمدة وتأكد من وجود بيانات صحيحة');
-        }
-        
-        if (!Array.isArray(data.datasets) || data.datasets.length === 0) {
-            throw new Error('لا توجد مجموعات بيانات للرسم');
-        }
-        
-        currentData = { xCol, yCol, groupBy, chartType, aggregation, ...data };
-        
-        hideLoadingScreen();
-        renderDynamicChart(data, chartType);
+        renderDashboard(data);
         
     } catch (error) {
         console.error('Analysis error:', error);
-        showError('❌ خطأ في التحليل: ' + error.message);
+        showError('خطأ في التحليل: ' + error.message);
         hideLoadingScreen();
     }
 }
 
-// ============= Chart Rendering =============
-
-function renderDynamicChart(data, chartType) {
-    const container = document.getElementById('chartContainer');
-    if (!container) return;
-    
-    // Final validation before rendering
-    if (!data || !Array.isArray(data.labels) || !Array.isArray(data.datasets)) {
-        showError('❌ لا توجد بيانات صالحة للعرض');
-        return;
-    }
-    
-    // Safely destroy old chart before creating new one
-    if (window.dynamicChart && typeof window.dynamicChart.destroy === 'function') {
-        try {
-            window.dynamicChart.destroy();
-        } catch (e) {
-            console.warn('Error destroying old chart:', e);
-        }
-    }
-    
-    container.innerHTML = '<canvas id="dynamicChart" style="width: 100%; height: 400px;"></canvas>';
-    
-    const ctx = document.getElementById('dynamicChart').getContext('2d');
-    
-    // Safe datasets access
-    const safeDatasets = data.datasets || [];
-    const firstDataset = safeDatasets[0] || { data: [] };
-    
-    const chartConfig = {
-        bar: {
-            type: 'bar',
-            data: { labels: data.labels, datasets: safeDatasets },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-        },
-        line: {
-            type: 'line',
-            data: { labels: data.labels, datasets: safeDatasets.map(ds => ({...ds, borderColor: ds.backgroundColor, backgroundColor: 'transparent', tension: 0.3, borderWidth: 3})) },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-        },
-        pie: {
-            type: 'doughnut',
-            data: { labels: data.labels, datasets: [{data: firstDataset.data || [], backgroundColor: ['#00855D', '#43a047', '#ffc107', '#ff9800', '#e53935', '#9c27b0'], borderColor: '#fff', borderWidth: 3}] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-        },
-        scatter: {
-            type: 'scatter',
-            data: { datasets: [{label: data.y_column || 'Y', data: (firstDataset.data || []).map((y, i) => ({ x: i, y: y })), backgroundColor: 'rgba(0, 133, 93, 0.8)', borderColor: '#00855D', borderWidth: 2, pointRadius: 8}] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true }, x: { display: false } } }
-        }
-    };
-    
-    window.dynamicChart = new Chart(ctx, chartConfig[chartType]);
-}
-
-// ============= Initialize =============
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('✓ HR Analytics v3 (Secured) loaded');
-    
-    if (isLoggedIn()) {
-        sessionToken = getToken();
-        showDashboard();
-        checkAuthStatus();
-    } else {
-        showLoginPage();
-    }
-});
+console.log('✓ HR Analytics script loaded');
