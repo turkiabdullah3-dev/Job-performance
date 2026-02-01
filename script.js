@@ -371,7 +371,7 @@ function showChartBuilderModal(columns) {
     // Check if columns is array of objects (with type info) or strings
     const isColumnInfo = columns.length > 0 && typeof columns[0] === 'object';
     const columnNames = isColumnInfo ? columns.map(c => c.name) : columns;
-    const numericColumns = isColumnInfo ? columns.filter(c => c.is_numeric).map(c => c.name) : columnNames;
+    const numericColumns = isColumnInfo ? columns.filter(c => c.is_numeric === 1 || c.is_numeric === true).map(c => c.name) : columnNames;
     
     console.log('📊 Column info:', { isColumnInfo, columnNames, numericColumns });
     
@@ -449,7 +449,7 @@ function showChartBuilderModal(columns) {
                 <div id="y-columns-container" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; background: white;">
                     ${columnNames.map(col => {
                         const colInfo = isColumnInfo ? columns.find(c => c.name === col) : null;
-                        const isNumeric = colInfo?.is_numeric || false;
+                        const isNumeric = colInfo && (colInfo.is_numeric === 1 || colInfo.is_numeric === true);
                         const numericPct = colInfo?.numeric_percentage || 0;
                         const style = !isNumeric ? 'opacity: 0.5;' : '';
                         const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px;">${numericPct}%</span>` : '<span style="font-size: 10px; background: #ccc; color: #666; padding: 2px 6px; border-radius: 3px;">نص</span>';

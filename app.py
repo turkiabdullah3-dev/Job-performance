@@ -833,10 +833,10 @@ def upload():
                 try:
                     numeric_count = pd.to_numeric(df_first[col], errors='coerce').notna().sum()
                     numeric_percentage = (numeric_count / len(df_first)) * 100 if len(df_first) > 0 else 0
-                    is_numeric = numeric_percentage > 0
+                    is_numeric = int(numeric_percentage > 0)  # Convert bool to int for JSON serialization
                     enhanced_columns.append({
                         'name': col,
-                        'numeric_percentage': round(numeric_percentage, 1),
+                        'numeric_percentage': float(round(numeric_percentage, 1)),
                         'is_numeric': is_numeric
                     })
                     logger.info(f"Column '{col}': {numeric_count}/{len(df_first)} numeric ({numeric_percentage:.1f}%)")
@@ -844,8 +844,8 @@ def upload():
                     logger.warning(f"Error analyzing column {col}: {str(col_e)}")
                     enhanced_columns.append({
                         'name': col,
-                        'numeric_percentage': 0,
-                        'is_numeric': False
+                        'numeric_percentage': 0.0,
+                        'is_numeric': 0
                     })
             
             logger.info(f"✓ Loaded {len(columns_list)} columns with type info")
