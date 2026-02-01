@@ -825,8 +825,30 @@ def upload():
         
         try:
             df_first, sheets = load_dataframe(file_bytes)
-            columns = [col for col in df_first.columns.tolist()]
-            logger.info(f"✓ Loaded {len(columns)} columns: {columns}")
+            columns_list = [col for col in df_first.columns.tolist()]
+            
+            # Analyze each column for numeric data
+            enhanced_columns = []
+            for col in columns_list:
+                try:
+                    numeric_count = pd.to_numeric(df_first[col], errors='coerce').notna().sum()
+                    numeric_percentage = (numeric_count / len(df_first)) * 100 if len(df_first) > 0 else 0
+                    is_numeric = numeric_percentage > 0
+                    enhanced_columns.append({
+                        'name': col,
+                        'numeric_percentage': round(numeric_percentage, 1),
+                        'is_numeric': is_numeric
+                    })
+                    logger.info(f"Column '{col}': {numeric_count}/{len(df_first)} numeric ({numeric_percentage:.1f}%)")
+                except Exception as col_e:
+                    logger.warning(f"Error analyzing column {col}: {str(col_e)}")
+                    enhanced_columns.append({
+                        'name': col,
+                        'numeric_percentage': 0,
+                        'is_numeric': False
+                    })
+            
+            logger.info(f"✓ Loaded {len(columns_list)} columns with type info")
         except Exception as e:
             logger.error(f"Data load error: {str(e)}")
             return jsonify({'error': f'Failed to read file: {str(e)}'}), 400
@@ -839,8 +861,8 @@ def upload():
             )
             thread.start()
         
-        logger.info(f"✓ Upload successful: file_id={file_id}, columns={len(columns)}")
-        return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id, 'columns': columns}), 200
+        logger.info(f"✓ Upload successful: file_id={file_id}, columns={len(columns_list)}")
+        return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id, 'columns': enhanced_columns}), 200
         
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
@@ -905,7 +927,7 @@ def analytics():
 
 @app.route('/get-columns', methods=['POST'])
 def get_columns():
-    """إرجاع قائمة الأعمدة في الملف"""
+    """إرجاع قائمة الأعمدة في الملف مع نوع البيانات"""
     token = request.headers.get('X-Session-Token')
     
     with lock:
@@ -926,9 +948,30 @@ def get_columns():
     
     try:
         df, _ = load_dataframe(files[file_id], sheet)
-        columns = [col for col in df.columns.tolist()]
-        return jsonify({'columns': columns}), 200
+        
+        # Analyze each column for numeric capability
+        columns_info = []
+        for col in df.columns:
+            # Try to convert to numeric
+            numeric_values = pd.to_numeric(df[col], errors='coerce')
+            numeric_count = numeric_values.notna().sum()
+            total_count = len(df)
+            
+            column_info = {
+                'name': col,
+                'numeric_percentage': round((numeric_count / total_count * 100) if total_count > 0 else 0, 1),
+                'is_numeric': numeric_count > 0
+            }
+            columns_info.append(column_info)
+            
+            logger.info(f"  Column '{col}': {numeric_count}/{total_count} numeric ({column_info['numeric_percentage']}%)")
+        
+        return jsonify({
+            'columns': columns_info,
+            'total_rows': len(df)
+        }), 200
     except Exception as e:
+        logger.error(f"get_columns error: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 

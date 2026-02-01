@@ -357,6 +357,13 @@ function showChartBuilderModal(columns) {
         return;
     }
     
+    // Check if columns is array of objects (with type info) or strings
+    const isColumnInfo = columns.length > 0 && typeof columns[0] === 'object';
+    const columnNames = isColumnInfo ? columns.map(c => c.name) : columns;
+    const numericColumns = isColumnInfo ? columns.filter(c => c.is_numeric).map(c => c.name) : columnNames;
+    
+    console.log('📊 Column info:', { isColumnInfo, columnNames, numericColumns });
+    
     const existingModal = document.getElementById('chart-builder-modal');
     if (existingModal) existingModal.remove();
     
@@ -387,12 +394,22 @@ function showChartBuilderModal(columns) {
         box-shadow: 0 10px 40px rgba(0,0,0,0.3);
     `;
     
+    // Build column options HTML with info badges
+    const buildColumnOption = (colName) => {
+        const colInfo = isColumnInfo ? columns.find(c => c.name === colName) : null;
+        const isNumeric = colInfo?.is_numeric || false;
+        const numericPct = colInfo?.numeric_percentage || 0;
+        const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px; margin-right: 8px;">${numericPct}% رقمي</span>` : '';
+        return `<option value="${colName}">${colName} ${badge}</option>`;
+    };
+    
     content.innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <h2 style="color: #00855D; margin: 0; font-size: 28px;">
                 <i class="fas fa-chart-bar"></i> بناء رسم بياني
             </h2>
             <p style="color: #666; margin: 10px 0 0 0;">اختر الأعمدة والخيارات لإنشاء رسم بياني مخصص</p>
+            ${numericColumns.length < columnNames.length ? `<p style="color: #ff9800; margin: 10px 0 0 0; font-size: 12px;"><i class="fas fa-info-circle"></i> ⚠️ بعض الأعمدة تحتوي على نصوص</p>` : ''}
         </div>
         
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
@@ -410,21 +427,29 @@ function showChartBuilderModal(columns) {
                     background: white;
                 ">
                     <option value="">-- اختر العمود --</option>
-                    ${columns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                    ${columnNames.map(col => `<option value="${col}">${col}</option>`).join('')}
                 </select>
             </div>
             
         <div style="margin-bottom: 25px;">
                 <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                    <i class="fas fa-arrows-alt-v"></i> الأعمدة المراد عرضها (Y) - اختر واحد أو أكثر:
+                    <i class="fas fa-arrows-alt-v"></i> الأعمدة المراد عرضها (Y) - اختر أعمدة رقمية:
                 </label>
                 <div id="y-columns-container" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; background: white;">
-                    ${columns.map(col => `
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.2s;">
-                            <input type="checkbox" value="${col}" style="width: 16px; height: 16px; accent-color: #00855D;">
-                            <span style="font-family: 'Cairo', sans-serif; flex: 1;">${col}</span>
-                        </label>
-                    `).join('')}
+                    ${columnNames.map(col => {
+                        const colInfo = isColumnInfo ? columns.find(c => c.name === col) : null;
+                        const isNumeric = colInfo?.is_numeric || false;
+                        const numericPct = colInfo?.numeric_percentage || 0;
+                        const style = !isNumeric ? 'opacity: 0.5;' : '';
+                        const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px;">${numericPct}%</span>` : '<span style="font-size: 10px; background: #ccc; color: #666; padding: 2px 6px; border-radius: 3px;">نص</span>';
+                        return `
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.2s; ${style}">
+                                <input type="checkbox" value="${col}" ${!isNumeric ? 'disabled' : ''} style="width: 16px; height: 16px; accent-color: #00855D;">
+                                <span style="font-family: 'Cairo', sans-serif; flex: 1;">${col}</span>
+                                ${badge}
+                            </label>
+                        `;
+                    }).join('')}
                 </div>
             </div>
         
@@ -538,13 +563,22 @@ function showChartBuilderModal(columns) {
         const chartType = document.querySelector('input[name="chart-type"]:checked').value;
         const aggregation = document.getElementById('aggregation-select').value;
         
+        // Validation
         if (!xCol) {
             showError('❌ يرجى اختيار المحور الأفقي (X)');
             return;
         }
         
         if (yColumns.length === 0) {
-            showError('❌ يرجى اختيار عمود واحد على الأقل للمحور العمودي (Y)');
+            showError('❌ يرجى اختيار عمود واحد على الأقل للمحور العمودي (Y)\n💡 تأكد من اختيار أعمدة رقمية (بها نسبة أعلى من 0%)');
+            return;
+        }
+        
+        // Check for numeric data
+        const disabledCheckboxes = yCheckboxes.filter(cb => cb.disabled);
+        if (disabledCheckboxes.length > 0) {
+            const textColumns = disabledCheckboxes.map(cb => cb.value);
+            showError(`⚠️ الأعمدة المختارة تحتوي على نصوص: ${textColumns.join(', ')}\nاختر أعمدة رقمية فقط`);
             return;
         }
         
