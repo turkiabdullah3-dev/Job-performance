@@ -1135,18 +1135,25 @@ def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_t
     """معالجة البيانات للرسوم البيانية الديناميكية"""
     
     try:
+        logger.info(f"🔍 Starting analysis: X={x_column}, Y={y_column}, Group={group_by}")
+        logger.info(f"   DataFrame shape: {df.shape}, columns: {list(df.columns)}")
+        
         # Select columns and drop nulls
         cols_needed = [x_column, y_column] + ([group_by] if group_by else [])
         df_clean = df[cols_needed].copy()
+        logger.info(f"   Before dropna: {len(df_clean)} rows")
+        
         df_clean = df_clean.dropna()
+        logger.info(f"   After dropna: {len(df_clean)} rows")
         
         # Convert y_column to numeric
         df_clean[y_column] = pd.to_numeric(df_clean[y_column], errors='coerce')
         df_clean = df_clean.dropna(subset=[y_column])
+        logger.info(f"   After numeric conversion: {len(df_clean)} rows")
         
         # If still no data, return empty structure
         if len(df_clean) == 0:
-            logger.warning(f"No valid numeric data found for {y_column}")
+            logger.error(f"❌ No valid data after cleaning for {y_column}")
             return {
                 'chart_type': chart_type,
                 'x_column': x_column,
@@ -1169,18 +1176,43 @@ def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_t
         else:
             grouped = df_clean.groupby(x_column)[y_column]
         
+        logger.info(f"   Grouped into {len(grouped)} groups")
+        
         # Apply aggregation
         agg_func = {'sum': 'sum', 'avg': 'mean', 'count': 'count', 'max': 'max', 'min': 'min'}.get(aggregation, 'mean')
         aggregated = grouped.agg(agg_func).reset_index()
         
+        logger.info(f"   After aggregation: {len(aggregated)} rows")
+        
+        if len(aggregated) == 0:
+            logger.error("❌ Aggregation returned empty dataframe")
+            return {
+                'chart_type': chart_type,
+                'x_column': x_column,
+                'y_column': y_column,
+                'aggregation': aggregation,
+                'labels': [],
+                'datasets': [{
+                    'label': f'{aggregation.upper()} {y_column}',
+                    'data': [],
+                    'backgroundColor': 'rgba(0, 133, 93, 0.8)',
+                    'borderColor': '#00855D',
+                    'borderWidth': 2
+                }],
+                'message': 'فشل التجميع'
+            }
+        
         if group_by:
             # Multiple series for grouped data
+            labels = sorted(aggregated[x_column].astype(str).unique().tolist())
+            logger.info(f"   Group mode: {len(labels)} unique X values")
+            
             result = {
                 'chart_type': chart_type,
                 'x_column': x_column,
                 'y_column': y_column,
                 'aggregation': aggregation,
-                'labels': sorted(aggregated[x_column].unique().tolist()),
+                'labels': labels,
                 'datasets': []
             }
             
@@ -1191,19 +1223,22 @@ def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_t
                 
                 result['datasets'].append({
                     'label': str(group_val),
-                    'data': subset.set_index(x_column).loc[result['labels'], y_column].fillna(0).tolist(),
+                    'data': subset.set_index(x_column).loc[labels, y_column].fillna(0).tolist(),
                     'backgroundColor': color,
                     'borderColor': color,
                     'borderWidth': 2
                 })
         else:
             # Single series
+            labels = aggregated[x_column].astype(str).tolist()
+            logger.info(f"   Single mode: {len(labels)} labels")
+            
             result = {
                 'chart_type': chart_type,
                 'x_column': x_column,
                 'y_column': y_column,
                 'aggregation': aggregation,
-                'labels': aggregated[x_column].astype(str).tolist(),
+                'labels': labels,
                 'datasets': [{
                     'label': f'{aggregation.upper()} {y_column}',
                     'data': aggregated[y_column].tolist(),
@@ -1213,7 +1248,7 @@ def process_dynamic_chart(df, x_column, y_column, group_by, aggregation, chart_t
                 }]
             }
         
-        logger.info(f"✓ Chart data: {len(result['labels'])} labels, {len(result['datasets'])} datasets")
+        logger.info(f"✅ Chart ready: {len(result['labels'])} labels, {len(result['datasets'])} datasets")
         return result
         
     except Exception as e:

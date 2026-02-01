@@ -654,8 +654,13 @@ async function runDynamicAnalysis(xCol, yCol, groupBy, chartType, aggregation) {
             throw new Error('البيانات المستلمة غير صالحة');
         }
         
-        if (!Array.isArray(data.labels) || data.labels.length === 0) {
-            throw new Error('لا توجد تسميات في البيانات');
+        if (!Array.isArray(data.labels)) {
+            console.error('❌ Missing labels:', data.labels);
+            throw new Error(`لا توجد تسميات في البيانات - Response: ${JSON.stringify(data)}`);
+        }
+        
+        if (data.labels.length === 0) {
+            throw new Error('البيانات فارغة - تحقق من اختيار الأعمدة وتأكد من وجود بيانات صحيحة');
         }
         
         if (!Array.isArray(data.datasets) || data.datasets.length === 0) {
