@@ -362,9 +362,12 @@ async function handleFileUpload(file) {
 // ============= Chart Builder Modal =============
 
 function showChartBuilderModal(columns) {
+    console.log('🚀 showChartBuilderModal called with:', columns);
+    
     // Validate columns
     if (!Array.isArray(columns) || columns.length === 0) {
         showError('❌ لا توجد أعمدة متاحة في الملف');
+        console.error('Invalid columns array:', columns);
         return;
     }
     
@@ -423,46 +426,45 @@ function showChartBuilderModal(columns) {
             ${numericColumns.length < columnNames.length ? `<p style="color: #ff9800; margin: 10px 0 0 0; font-size: 12px;"><i class="fas fa-info-circle"></i> ⚠️ بعض الأعمدة تحتوي على نصوص</p>` : ''}
         </div>
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
-            <div>
-                <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                    <i class="fas fa-arrows-alt-h"></i> المحور الأفقي (X):
-                </label>
-                <select id="x-column-select" style="
-                    width: 100%;
-                    padding: 12px;
-                    border: 2px solid #D4E5DD;
-                    border-radius: 10px;
-                    font-family: 'Cairo', sans-serif;
-                    font-size: 14px;
-                    background: white;
-                ">
-                    <option value="">-- اختر العمود --</option>
-                    ${columnNames.map(col => `<option value="${col}">${col}</option>`).join('')}
-                </select>
-            </div>
+        <div style="margin-bottom: 25px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
+                <i class="fas fa-arrows-alt-h"></i> المحور الأفقي (X):
+            </label>
+            <select id="x-column-select" style="
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #D4E5DD;
+                border-radius: 10px;
+                font-family: 'Cairo', sans-serif;
+                font-size: 14px;
+                background: white;
+            ">
+                <option value="">-- اختر العمود --</option>
+                ${columnNames.map(col => `<option value="${col}">${col}</option>`).join('')}
+            </select>
+        </div>
             
         <div style="margin-bottom: 25px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
-                    <i class="fas fa-arrows-alt-v"></i> الأعمدة المراد عرضها (Y) - اختر أعمدة رقمية:
-                </label>
-                <div id="y-columns-container" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; background: white;">
-                    ${columnNames.map(col => {
-                        const colInfo = isColumnInfo ? columns.find(c => c.name === col) : null;
-                        const isNumeric = colInfo && (colInfo.is_numeric === 1 || colInfo.is_numeric === true);
-                        const numericPct = colInfo?.numeric_percentage || 0;
-                        const style = !isNumeric ? 'opacity: 0.5;' : '';
-                        const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px;">${numericPct}%</span>` : '<span style="font-size: 10px; background: #ccc; color: #666; padding: 2px 6px; border-radius: 3px;">نص</span>';
-                        return `
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.2s; ${style}">
-                                <input type="checkbox" value="${col}" ${!isNumeric ? 'disabled' : ''} style="width: 16px; height: 16px; accent-color: #00855D;">
-                                <span style="font-family: 'Cairo', sans-serif; flex: 1;">${col}</span>
-                                ${badge}
-                            </label>
-                        `;
-                    }).join('')}
-                </div>
+            <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
+                <i class="fas fa-arrows-alt-v"></i> الأعمدة المراد عرضها (Y) - اختر أعمدة رقمية:
+            </label>
+            <div id="y-columns-container" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto; padding: 10px; border: 2px solid #D4E5DD; border-radius: 8px; background: white;">
+                ${columnNames.map(col => {
+                    const colInfo = isColumnInfo ? columns.find(c => c.name === col) : null;
+                    const isNumeric = colInfo && (colInfo.is_numeric === 1 || colInfo.is_numeric === true);
+                    const numericPct = colInfo?.numeric_percentage || 0;
+                    const style = !isNumeric ? 'opacity: 0.5;' : '';
+                    const badge = isNumeric ? `<span style="font-size: 10px; background: #43a047; color: white; padding: 2px 6px; border-radius: 3px;">${numericPct}%</span>` : '<span style="font-size: 10px; background: #ccc; color: #666; padding: 2px 6px; border-radius: 3px;">نص</span>';
+                    return `
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.2s; ${style}">
+                            <input type="checkbox" value="${col}" ${!isNumeric ? 'disabled' : ''} style="width: 16px; height: 16px; accent-color: #00855D;">
+                            <span style="font-family: 'Cairo', sans-serif; flex: 1;">${col}</span>
+                            ${badge}
+                        </label>
+                    `;
+                }).join('')}
             </div>
+        </div>
         
         <div style="margin-bottom: 25px;">
             <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #1B4D3E;">
@@ -478,7 +480,7 @@ function showChartBuilderModal(columns) {
                 background: white;
             ">
                 <option value="">-- بدون تجميع --</option>
-                ${columns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                ${columnNames.map(col => `<option value="${col}">${col}</option>`).join('')}
             </select>
         </div>
         
@@ -776,11 +778,18 @@ function renderDynamicChart(data, chartType) {
         return;
     }
     
+    // Safely destroy old chart before creating new one
+    if (window.dynamicChart && typeof window.dynamicChart.destroy === 'function') {
+        try {
+            window.dynamicChart.destroy();
+        } catch (e) {
+            console.warn('Error destroying old chart:', e);
+        }
+    }
+    
     container.innerHTML = '<canvas id="dynamicChart" style="width: 100%; height: 400px;"></canvas>';
     
     const ctx = document.getElementById('dynamicChart').getContext('2d');
-    
-    if (window.dynamicChart) window.dynamicChart.destroy();
     
     // Safe datasets access
     const safeDatasets = data.datasets || [];
