@@ -1336,7 +1336,7 @@ def status():
     return jsonify({'status': 'running', 'fast': True}), 200
 
 if __name__ == '__main__':
-    PORT = int(os.environ.get('PORT', 8080))
+    PORT = int(os.environ.get('PORT', 3000))
     print("\n🔒 Secure HR Analytics System")
     print("=" * 50)
     print("✅ Enhanced Security Features:")
