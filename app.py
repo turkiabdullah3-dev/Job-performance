@@ -789,49 +789,62 @@ def init_session():
 @app.route('/upload', methods=['POST'])
 def upload():
     """Upload file for authenticated user"""
-    # Check authentication
-    session_data, error, status = check_auth(request)
-    if error:
-        return jsonify({'error': error}), status
-    
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    if not file.filename:
-        return jsonify({'error': 'No filename'}), 400
-    
-    if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
-        return jsonify({'error': 'Only Excel/CSV files allowed'}), 400
-    
-    file_bytes = file.read()
-    if not file_bytes:
-        return jsonify({'error': 'Empty file'}), 400
-    
-    file_id = hashlib.sha256(file_bytes).hexdigest()[:16]
-    
-    with lock:
-        files[file_id] = file_bytes
-        progress[file_id] = {'status': '✓ تم التحميل', 'progress': 0}
-        session_data['file_id'] = file_id
-    
-    logger.info(f"File: {file.filename} ({len(file_bytes)} bytes)")
-    
     try:
-        df_first, sheets = load_dataframe(file_bytes)
-        columns = [col for col in df_first.columns.tolist()]
+        # Check authentication
+        session_data, error, status = check_auth(request)
+        if error:
+            logger.error(f"Auth error on upload: {error}")
+            return jsonify({'error': error}), status
+        
+        if 'file' not in request.files:
+            logger.error("No file in request")
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if not file.filename:
+            logger.error("Empty filename")
+            return jsonify({'error': 'No filename'}), 400
+        
+        if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+            logger.error(f"Invalid file type: {file.filename}")
+            return jsonify({'error': 'Only Excel/CSV files allowed'}), 400
+        
+        file_bytes = file.read()
+        if not file_bytes:
+            logger.error("Empty file content")
+            return jsonify({'error': 'Empty file'}), 400
+        
+        file_id = hashlib.sha256(file_bytes).hexdigest()[:16]
+        
+        with lock:
+            files[file_id] = file_bytes
+            progress[file_id] = {'status': '✓ تم التحميل', 'progress': 0}
+            session_data['file_id'] = file_id
+        
+        logger.info(f"File: {file.filename} ({len(file_bytes)} bytes)")
+        
+        try:
+            df_first, sheets = load_dataframe(file_bytes)
+            columns = [col for col in df_first.columns.tolist()]
+            logger.info(f"✓ Loaded {len(columns)} columns: {columns}")
+        except Exception as e:
+            logger.error(f"Data load error: {str(e)}")
+            return jsonify({'error': f'Failed to read file: {str(e)}'}), 400
+        
+        for sheet in sheets:
+            thread = threading.Thread(
+                target=analyze_background,
+                args=(file_id, sheet, file_bytes),
+                daemon=True
+            )
+            thread.start()
+        
+        logger.info(f"✓ Upload successful: file_id={file_id}, columns={len(columns)}")
+        return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id, 'columns': columns}), 200
+        
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
-    
-    for sheet in sheets:
-        thread = threading.Thread(
-            target=analyze_background,
-            args=(file_id, sheet, file_bytes),
-            daemon=True
-        )
-        thread.start()
-    
-    return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id, 'columns': columns})
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/progress', methods=['GET'])
 def get_progress():

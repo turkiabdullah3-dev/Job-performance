@@ -322,24 +322,29 @@ async function handleFileUpload(file) {
             headers: { 'X-Session-Token': sessionToken } 
         });
         
+        console.log('Upload response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error('Upload failed');
+            const errorData = await response.json();
+            console.error('Upload error response:', errorData);
+            throw new Error(errorData.error || 'Upload failed');
         }
         
         const data = await response.json();
+        console.log('Upload success response:', data);
         
-        if (data.success) {
+        if (data.success && data.columns) {
             currentFileId = data.file_id;
             currentSheetName = data.sheets[0] || 'Sheet1';
             hideLoadingScreen();
             showChartBuilderModal(data.columns);
         } else {
-            throw new Error(data.error || 'Upload failed');
+            throw new Error(data.error || 'Upload returned invalid data');
         }
     } catch (error) {
         console.error('Upload error:', error);
-        showError('❌ خطأ في الرفع: ' + error.message);
         hideLoadingScreen();
+        showError('❌ خطأ في الرفع: ' + error.message);
     }
 }
 
