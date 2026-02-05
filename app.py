@@ -792,11 +792,25 @@ def init_session():
 def upload():
     """Upload file for authenticated user"""
     try:
-        # Check authentication
-        session_data, error, status = check_auth(request)
-        if error:
-            logger.error(f"Auth error on upload: {error}")
-            return jsonify({'error': error}), status
+        # Allow anonymous session for upload if no token provided
+        token = request.headers.get('X-Session-Token')
+        session_data = None
+        if token:
+            session_data, error, status = check_auth(request)
+            if error:
+                logger.error(f"Auth error on upload: {error}")
+                return jsonify({'error': error}), status
+        else:
+            token = secrets.token_hex(16)
+            with lock:
+                sessions[token] = {
+                    'username': 'guest',
+                    'created_at': datetime.now(),
+                    'last_activity': datetime.now(),
+                    'expires': datetime.now() + SESSION_TIMEOUT,
+                    'file_id': None
+                }
+            session_data = sessions[token]
         
         if 'file' not in request.files:
             logger.error("No file in request")
@@ -864,7 +878,13 @@ def upload():
             thread.start()
         
         logger.info(f"✓ Upload successful: file_id={file_id}, columns={len(columns_list)}")
-        return jsonify({'success': True, 'sheets': sheets, 'file_id': file_id, 'columns': enhanced_columns}), 200
+        return jsonify({
+            'success': True,
+            'sheets': sheets,
+            'file_id': file_id,
+            'columns': enhanced_columns,
+            'session_token': token
+        }), 200
         
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)

@@ -272,6 +272,9 @@ function attachEventListeners() {
             const data = await response.json();
             
             if (data.success) {
+                if (data.session_token) {
+                    sessionToken = data.session_token;
+                }
                 currentFileId = data.file_id;
                 currentSheetName = data.sheets[0] || 'Sheet1';
                 hideLoadingScreen();
