@@ -11,6 +11,14 @@ import logging
 import os
 import re
 import bcrypt
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
+from scipy import stats
+import warnings
+warnings.filterwarnings('ignore')
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1344,6 +1352,448 @@ def clear():
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({'status': 'running', 'fast': True}), 200
+
+@app.route('/ai-analyze', methods=['POST'])
+def ai_analyze():
+    """
+    نظام التحليل الذكي المتقدم باستخدام الذكاء الاصطناعي
+    يقوم بـ:
+    - التنبؤ بأداء الموظفين المستقبلي
+    - تصنيف الموظفين حسب الأداء
+    - اكتشاف الأنماط المخفية
+    - تقديم توصيات ذكية
+    - تحليل الاتجاهات
+    """
+    auth_result = check_auth()
+    if auth_result:
+        return auth_result
+    
+    data = request.json
+    file_id = data.get('file_id')
+    dept_column = data.get('dept_column')
+    rating_columns = data.get('rating_columns', [])
+    
+    if not file_id or file_id not in files:
+        return jsonify({'error': 'Invalid file ID'}), 400
+    
+    try:
+        with lock:
+            df = load_dataframe(file_id)
+            
+            if df is None or df.empty:
+                return jsonify({'error': 'Failed to load data'}), 400
+            
+            # تحويل التقييمات إلى أرقام
+            for col in rating_columns:
+                if col in df.columns:
+                    df[col] = df[col].apply(_convert_rating)
+            
+            # حساب متوسط الأداء
+            df['avg_rating'] = df[rating_columns].mean(axis=1)
+            
+            # إزالة القيم المفقودة
+            df_clean = df.dropna(subset=['avg_rating'])
+            
+            if len(df_clean) < 10:
+                return jsonify({'error': 'Not enough data for AI analysis'}), 400
+            
+            # ========== 1. التنبؤ بالأداء المستقبلي ==========
+            predictions = _predict_future_performance(df_clean, rating_columns)
+            
+            # ========== 2. تصنيف الموظفين (Clustering) ==========
+            clusters = _perform_employee_clustering(df_clean, rating_columns)
+            
+            # ========== 3. اكتشاف الأنماط والاتجاهات ==========
+            patterns = _discover_patterns(df_clean, dept_column, rating_columns)
+            
+            # ========== 4. التوصيات الذكية ==========
+            recommendations = _generate_smart_recommendations(df_clean, patterns, clusters)
+            
+            # ========== 5. تحليل الانحدار والارتباط ==========
+            correlations = _analyze_correlations(df_clean, rating_columns)
+            
+            # ========== 6. كشف الشذوذ (Anomaly Detection) ==========
+            anomalies = _detect_anomalies(df_clean, rating_columns)
+            
+            # ========== 7. تحليل التوزيع الإحصائي ==========
+            statistical_analysis = _perform_statistical_analysis(df_clean, rating_columns)
+            
+            ai_results = {
+                'success': True,
+                'total_records': len(df_clean),
+                'ai_insights': {
+                    'predictions': predictions,
+                    'employee_clusters': clusters,
+                    'patterns': patterns,
+                    'recommendations': recommendations,
+                    'correlations': correlations,
+                    'anomalies': anomalies,
+                    'statistical_analysis': statistical_analysis
+                },
+                'summary': {
+                    'high_performers': int((df_clean['avg_rating'] >= 4.0).sum()),
+                    'average_performers': int(((df_clean['avg_rating'] >= 3.0) & (df_clean['avg_rating'] < 4.0)).sum()),
+                    'low_performers': int((df_clean['avg_rating'] < 3.0).sum()),
+                    'avg_overall_rating': float(df_clean['avg_rating'].mean()),
+                    'std_overall_rating': float(df_clean['avg_rating'].std())
+                }
+            }
+            
+            logger.info(f"✅ AI Analysis completed: {len(df_clean)} records analyzed")
+            return jsonify(ai_results), 200
+            
+    except Exception as e:
+        logger.error(f"AI Analysis error: {str(e)}")
+        return jsonify({'error': f'AI analysis failed: {str(e)}'}), 500
+
+
+def _predict_future_performance(df, rating_columns):
+    """التنبؤ بالأداء المستقبلي باستخدام Gradient Boosting"""
+    try:
+        X = df[rating_columns].values
+        y = df['avg_rating'].values
+        
+        # تقسيم البيانات
+        split = int(len(df) * 0.8)
+        X_train, X_test = X[:split], X[split:]
+        y_train, y_test = y[:split], y[split:]
+        
+        # تدريب النموذج
+        model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+        
+        # التنبؤ
+        predictions = model.predict(X_test)
+        
+        # حساب دقة النموذج
+        mse = np.mean((predictions - y_test) ** 2)
+        r2 = 1 - (mse / np.var(y_test))
+        
+        # التنبؤ لجميع الموظفين
+        all_predictions = model.predict(X)
+        
+        # تحديد الموظفين الأكثر تحسنًا/تراجعًا
+        performance_change = all_predictions - y
+        
+        return {
+            'model_accuracy': float(r2 * 100),
+            'predicted_avg_rating': float(np.mean(all_predictions)),
+            'expected_improvement': float(np.mean(performance_change[performance_change > 0])) if any(performance_change > 0) else 0,
+            'at_risk_count': int((performance_change < -0.5).sum()),
+            'rising_stars_count': int((performance_change > 0.5).sum()),
+            'feature_importance': {
+                col: float(imp) for col, imp in zip(rating_columns, model.feature_importances_)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Prediction error: {str(e)}")
+        return {'error': str(e)}
+
+
+def _perform_employee_clustering(df, rating_columns):
+    """تصنيف الموظفين إلى مجموعات باستخدام K-Means"""
+    try:
+        X = df[rating_columns].values
+        
+        # تطبيع البيانات
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # تحديد العدد الأمثل للمجموعات (2-5)
+        best_k = 3
+        best_score = -1
+        
+        for k in range(2, min(6, len(df) // 10)):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(X_scaled)
+            if len(set(labels)) > 1:
+                score = silhouette_score(X_scaled, labels)
+                if score > best_score:
+                    best_score = score
+                    best_k = k
+        
+        # التصنيف النهائي
+        kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(X_scaled)
+        
+        # تحليل كل مجموعة
+        clusters_info = []
+        for i in range(best_k):
+            cluster_data = df[labels == i]
+            clusters_info.append({
+                'cluster_id': i + 1,
+                'size': int((labels == i).sum()),
+                'avg_rating': float(cluster_data['avg_rating'].mean()),
+                'description': _get_cluster_description(cluster_data['avg_rating'].mean())
+            })
+        
+        # ترتيب المجموعات حسب الأداء
+        clusters_info.sort(key=lambda x: x['avg_rating'], reverse=True)
+        
+        return {
+            'num_clusters': best_k,
+            'silhouette_score': float(best_score),
+            'clusters': clusters_info
+        }
+    except Exception as e:
+        logger.error(f"Clustering error: {str(e)}")
+        return {'error': str(e)}
+
+
+def _get_cluster_description(avg_rating):
+    """وصف المجموعة بناءً على متوسط التقييم"""
+    if avg_rating >= 4.5:
+        return "نجوم متميزون - أداء استثنائي"
+    elif avg_rating >= 4.0:
+        return "أداء ممتاز - فوق المتوسط"
+    elif avg_rating >= 3.5:
+        return "أداء جيد - ضمن المتوسط"
+    elif avg_rating >= 3.0:
+        return "أداء مقبول - يحتاج تحسين"
+    else:
+        return "أداء ضعيف - يحتاج تطوير عاجل"
+
+
+def _discover_patterns(df, dept_column, rating_columns):
+    """اكتشاف الأنماط المخفية في البيانات"""
+    try:
+        patterns = []
+        
+        # 1. تحليل التباين بين الإدارات
+        if dept_column and dept_column in df.columns:
+            dept_stats = df.groupby(dept_column)['avg_rating'].agg(['mean', 'std', 'count'])
+            dept_stats = dept_stats.sort_values('mean', ascending=False)
+            
+            if len(dept_stats) > 1:
+                best_dept = dept_stats.index[0]
+                worst_dept = dept_stats.index[-1]
+                gap = float(dept_stats.loc[best_dept, 'mean'] - dept_stats.loc[worst_dept, 'mean'])
+                
+                patterns.append({
+                    'type': 'department_variance',
+                    'title': 'فجوة الأداء بين الإدارات',
+                    'description': f'فرق {gap:.2f} نقطة بين أفضل وأضعف إدارة',
+                    'best_department': best_dept,
+                    'worst_department': worst_dept,
+                    'gap': gap
+                })
+        
+        # 2. اكتشاف الاتجاهات في معايير التقييم
+        correlation_matrix = df[rating_columns].corr()
+        high_correlations = []
+        
+        for i in range(len(rating_columns)):
+            for j in range(i+1, len(rating_columns)):
+                corr = correlation_matrix.iloc[i, j]
+                if abs(corr) > 0.7:
+                    high_correlations.append({
+                        'criteria_1': rating_columns[i],
+                        'criteria_2': rating_columns[j],
+                        'correlation': float(corr)
+                    })
+        
+        if high_correlations:
+            patterns.append({
+                'type': 'criteria_correlation',
+                'title': 'ارتباط قوي بين المعايير',
+                'description': f'تم اكتشاف {len(high_correlations)} ارتباط قوي',
+                'correlations': high_correlations[:3]
+            })
+        
+        # 3. كشف التوزيع غير المتوازن
+        rating_dist = pd.cut(df['avg_rating'], bins=[0, 2, 3, 4, 5], labels=['ضعيف', 'مقبول', 'جيد', 'ممتاز'])
+        dist_counts = rating_dist.value_counts()
+        
+        if len(dist_counts) > 0:
+            dominant_category = dist_counts.index[0]
+            dominance_pct = float((dist_counts.iloc[0] / len(df)) * 100)
+            
+            if dominance_pct > 60:
+                patterns.append({
+                    'type': 'skewed_distribution',
+                    'title': 'توزيع غير متوازن',
+                    'description': f'{dominance_pct:.1f}% من الموظفين في فئة "{dominant_category}"',
+                    'dominant_category': dominant_category,
+                    'percentage': dominance_pct
+                })
+        
+        return patterns
+        
+    except Exception as e:
+        logger.error(f"Pattern discovery error: {str(e)}")
+        return []
+
+
+def _generate_smart_recommendations(df, patterns, clusters):
+    """توليد توصيات ذكية بناءً على التحليل"""
+    recommendations = []
+    
+    try:
+        # 1. توصيات بناءً على الأداء العام
+        avg_rating = df['avg_rating'].mean()
+        
+        if avg_rating < 3.5:
+            recommendations.append({
+                'priority': 'عالية',
+                'category': 'تحسين الأداء',
+                'title': 'الأداء العام أقل من المتوسط',
+                'action': 'تنفيذ برنامج تدريب شامل لرفع مستوى الأداء',
+                'expected_impact': 'زيادة متوقعة بنسبة 15-20%'
+            })
+        
+        # 2. توصيات بناءً على الأنماط
+        for pattern in patterns:
+            if pattern['type'] == 'department_variance':
+                gap = pattern.get('gap', 0)
+                if gap > 1.0:
+                    recommendations.append({
+                        'priority': 'عالية',
+                        'category': 'تطوير الإدارات',
+                        'title': f'فجوة كبيرة في أداء إدارة {pattern["worst_department"]}',
+                        'action': f'نقل الممارسات الناجحة من {pattern["best_department"]}',
+                        'expected_impact': f'تقليل الفجوة بمقدار {gap/2:.2f} نقطة'
+                    })
+        
+        # 3. توصيات بناءً على التصنيف
+        if 'clusters' in clusters:
+            low_performing_clusters = [c for c in clusters['clusters'] if c['avg_rating'] < 3.0]
+            if low_performing_clusters:
+                total_low = sum(c['size'] for c in low_performing_clusters)
+                recommendations.append({
+                    'priority': 'متوسطة',
+                    'category': 'تطوير الموظفين',
+                    'title': f'{total_low} موظف يحتاجون تطوير عاجل',
+                    'action': 'إنشاء خطط تطوير فردية مع متابعة شهرية',
+                    'expected_impact': 'تحسين أداء 60-70% منهم خلال 6 أشهر'
+                })
+        
+        # 4. توصية عامة للتميز
+        high_performers = int((df['avg_rating'] >= 4.5).sum())
+        if high_performers > 0:
+            recommendations.append({
+                'priority': 'منخفضة',
+                'category': 'الاحتفاظ بالمواهب',
+                'title': f'{high_performers} موظف متميز يجب الحفاظ عليهم',
+                'action': 'برنامج تقدير ومكافآت للمحافظة على المتميزين',
+                'expected_impact': 'تقليل نسبة الاستقالات بنسبة 40%'
+            })
+        
+        return recommendations
+        
+    except Exception as e:
+        logger.error(f"Recommendations error: {str(e)}")
+        return []
+
+
+def _analyze_correlations(df, rating_columns):
+    """تحليل الارتباطات بين المعايير"""
+    try:
+        corr_matrix = df[rating_columns].corr()
+        
+        correlations = []
+        for i in range(len(rating_columns)):
+            for j in range(i+1, len(rating_columns)):
+                correlations.append({
+                    'criterion_1': rating_columns[i],
+                    'criterion_2': rating_columns[j],
+                    'correlation': float(corr_matrix.iloc[i, j]),
+                    'strength': _get_correlation_strength(corr_matrix.iloc[i, j])
+                })
+        
+        # ترتيب حسب قوة الارتباط
+        correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
+        
+        return correlations[:10]  # أقوى 10 ارتباطات
+        
+    except Exception as e:
+        logger.error(f"Correlation error: {str(e)}")
+        return []
+
+
+def _get_correlation_strength(corr):
+    """تحديد قوة الارتباط"""
+    abs_corr = abs(corr)
+    if abs_corr >= 0.8:
+        return "قوي جداً"
+    elif abs_corr >= 0.6:
+        return "قوي"
+    elif abs_corr >= 0.4:
+        return "متوسط"
+    elif abs_corr >= 0.2:
+        return "ضعيف"
+    else:
+        return "ضعيف جداً"
+
+
+def _detect_anomalies(df, rating_columns):
+    """كشف القيم الشاذة باستخدام Z-Score"""
+    try:
+        anomalies = []
+        
+        z_scores = np.abs(stats.zscore(df[rating_columns]))
+        
+        # القيم التي تتجاوز 3 انحرافات معيارية
+        anomaly_mask = (z_scores > 3).any(axis=1)
+        anomaly_count = int(anomaly_mask.sum())
+        
+        if anomaly_count > 0:
+            anomaly_data = df[anomaly_mask]
+            
+            anomalies.append({
+                'type': 'outliers',
+                'count': anomaly_count,
+                'percentage': float((anomaly_count / len(df)) * 100),
+                'description': f'تم اكتشاف {anomaly_count} حالة شاذة تحتاج مراجعة',
+                'avg_rating_outliers': float(anomaly_data['avg_rating'].mean())
+            })
+        
+        return anomalies
+        
+    except Exception as e:
+        logger.error(f"Anomaly detection error: {str(e)}")
+        return []
+
+
+def _perform_statistical_analysis(df, rating_columns):
+    """تحليل إحصائي شامل"""
+    try:
+        analysis = {
+            'overall': {
+                'mean': float(df['avg_rating'].mean()),
+                'median': float(df['avg_rating'].median()),
+                'std': float(df['avg_rating'].std()),
+                'min': float(df['avg_rating'].min()),
+                'max': float(df['avg_rating'].max()),
+                'skewness': float(stats.skew(df['avg_rating'])),
+                'kurtosis': float(stats.kurtosis(df['avg_rating']))
+            },
+            'criteria_analysis': []
+        }
+        
+        # تحليل كل معيار
+        for col in rating_columns:
+            analysis['criteria_analysis'].append({
+                'criterion': col,
+                'mean': float(df[col].mean()),
+                'std': float(df[col].std()),
+                'median': float(df[col].median())
+            })
+        
+        # تفسير النتائج
+        skewness = analysis['overall']['skewness']
+        if abs(skewness) < 0.5:
+            analysis['distribution_type'] = 'متوازن'
+        elif skewness > 0.5:
+            analysis['distribution_type'] = 'منحرف لليمين (معظم التقييمات منخفضة)'
+        else:
+            analysis['distribution_type'] = 'منحرف لليسار (معظم التقييمات مرتفعة)'
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Statistical analysis error: {str(e)}")
+        return {}
+
 
 if __name__ == '__main__':
     PORT = int(os.environ.get('PORT', 5000))

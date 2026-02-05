@@ -202,6 +202,9 @@ function buildPageHTML() {
                 <button id="open-columns" class="btn btn-secondary" style="display:none;">
                     <i class="fas fa-columns"></i> اختيار الأعمدة
                 </button>
+                <button id="ai-analyze-btn" class="btn" style="display:none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-right: 10px;">
+                    <i class="fas fa-brain"></i> تحليل ذكي بالذكاء الاصطناعي
+                </button>
             </div>
 
             <!-- Stats Section -->
@@ -382,7 +385,9 @@ function attachEventListeners() {
                 currentFileId = data.file_id;
                 currentSheetName = data.sheets[0] || 'Sheet1';
                 const openColumnsBtn = document.getElementById('open-columns');
+                const aiAnalyzeBtn = document.getElementById('ai-analyze-btn');
                 if (openColumnsBtn) openColumnsBtn.style.display = 'inline-flex';
+                if (aiAnalyzeBtn) aiAnalyzeBtn.style.display = 'inline-flex';
                 hideLoadingScreen();
                 // جلب الأعمدة وعرض نافذة الاختيار
                 showColumnSelectionModal(currentSheetName);
@@ -405,6 +410,18 @@ function attachEventListeners() {
                 return;
             }
             showColumnSelectionModal(currentSheetName);
+        });
+    }
+    
+    // AI Analyze button
+    const aiAnalyzeBtn = document.getElementById('ai-analyze-btn');
+    if (aiAnalyzeBtn) {
+        aiAnalyzeBtn.addEventListener('click', async () => {
+            if (!currentFileId) {
+                showError('يرجى رفع ملف أولاً');
+                return;
+            }
+            await runAIAnalysis();
         });
     }
 
@@ -1240,6 +1257,342 @@ async function runCustomAnalysis(deptCol, ratingCols) {
         showError('خطأ في التحليل: ' + error.message);
         hideLoadingScreen();
     }
+}
+
+// ========== AI Analysis Functions ==========
+
+async function runAIAnalysis() {
+    if (!currentFileId) {
+        showError('يرجى رفع ملف أولاً');
+        return;
+    }
+    
+    showLoadingScreen('جاري التحليل الذكي...', 'الذكاء الاصطناعي يقوم بتحليل البيانات بعمق');
+    
+    try {
+        // جلب الأعمدة أولاً
+        const columnsResponse = await fetch(`${API_BASE}/get-columns`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Token': sessionToken
+            },
+            body: JSON.stringify({
+                file_id: currentFileId,
+                sheet: currentSheetName
+            })
+        });
+        
+        const columnsData = await columnsResponse.json();
+        
+        if (!columnsResponse.ok || !columnsData.success) {
+            throw new Error(columnsData.error || 'فشل في جلب الأعمدة');
+        }
+        
+        const columns = columnsData.columns;
+        const numericColumns = columns.filter(c => c.is_numeric).map(c => c.name);
+        
+        if (numericColumns.length === 0) {
+            throw new Error('لا توجد أعمدة رقمية للتحليل');
+        }
+        
+        // استخدام أول عمود نصي كعمود الإدارة
+        const deptColumn = columns.find(c => !c.is_numeric)?.name || columns[0].name;
+        
+        // إجراء التحليل الذكي
+        const response = await fetch(`${API_BASE}/ai-analyze`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Token': sessionToken
+            },
+            body: JSON.stringify({
+                file_id: currentFileId,
+                dept_column: deptColumn,
+                rating_columns: numericColumns
+            })
+        });
+        
+        const textResponse = await response.text();
+        let aiData;
+        
+        try {
+            aiData = JSON.parse(textResponse);
+        } catch (e) {
+            console.error('JSON parse error:', e);
+            console.error('Response text:', textResponse);
+            throw new Error('خطأ في تحليل استجابة الخادم');
+        }
+        
+        if (!response.ok) {
+            throw new Error(aiData.error || `AI analysis failed (HTTP ${response.status})`);
+        }
+        
+        // عرض نتائج التحليل الذكي
+        displayAIResults(aiData);
+        hideLoadingScreen();
+        
+    } catch (error) {
+        console.error('AI Analysis error:', error);
+        showError('خطأ في التحليل الذكي: ' + error.message);
+        hideLoadingScreen();
+    }
+}
+
+function displayAIResults(data) {
+    const app = document.getElementById('app');
+    if (!app) return;
+    
+    const insights = data.ai_insights || {};
+    const summary = data.summary || {};
+    
+    let html = `
+        <div id="loadingScreen"></div>
+        <div id="error-banner"></div>
+        
+        <!-- Header -->
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <i class="fas fa-brain" style="font-size: 32px; color: #667eea;"></i>
+                <div>
+                    <h1>نتائج التحليل الذكي</h1>
+                    <p style="margin: 0; opacity: 0.8; font-size: 14px;">مدعوم بالذكاء الاصطناعي</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="location.reload()" class="btn btn-secondary">
+                    <i class="fas fa-home"></i> الرئيسية
+                </button>
+            </div>
+        </div>
+        
+        <div class="container">
+            <!-- Summary Cards -->
+            <div class="stats-section">
+                <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <i class="fas fa-users"></i>
+                    <h3>${data.total_records || 0}</h3>
+                    <p>إجمالي السجلات المحللة</p>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                    <i class="fas fa-star"></i>
+                    <h3>${summary.high_performers || 0}</h3>
+                    <p>موظفون متميزون</p>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>${summary.average_performers || 0}</h3>
+                    <p>أداء متوسط</p>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>${summary.low_performers || 0}</h3>
+                    <p>يحتاجون تطوير</p>
+                </div>
+            </div>
+    `;
+    
+    // Predictions Section
+    if (insights.predictions && !insights.predictions.error) {
+        const pred = insights.predictions;
+        html += `
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <i class="fas fa-crystal-ball"></i> التنبؤ بالأداء المستقبلي
+                </div>
+                <div style="padding: 30px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                            <div style="font-size: 36px; font-weight: bold; color: #667eea;">${pred.model_accuracy?.toFixed(1) || 0}%</div>
+                            <div style="color: #666; margin-top: 10px;">دقة النموذج</div>
+                        </div>
+                        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                            <div style="font-size: 36px; font-weight: bold; color: #00855D;">${pred.predicted_avg_rating?.toFixed(2) || 0}</div>
+                            <div style="color: #666; margin-top: 10px;">التقييم المتوقع</div>
+                        </div>
+                        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                            <div style="font-size: 36px; font-weight: bold; color: #f5576c;">${pred.at_risk_count || 0}</div>
+                            <div style="color: #666; margin-top: 10px;">موظفون معرضون للخطر</div>
+                        </div>
+                        <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                            <div style="font-size: 36px; font-weight: bold; color: #4facfe;">${pred.rising_stars_count || 0}</div>
+                            <div style="color: #666; margin-top: 10px;">نجوم صاعدة</div>
+                        </div>
+                    </div>
+                    
+                    ${pred.feature_importance ? `
+                        <div>
+                            <h4 style="margin-bottom: 15px; color: #1B4D3E;">أهمية المعايير في التنبؤ:</h4>
+                            ${Object.entries(pred.feature_importance)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([name, importance]) => `
+                                    <div style="margin-bottom: 10px;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                            <span style="font-weight: 600;">${name}</span>
+                                            <span style="color: #667eea;">${(importance * 100).toFixed(1)}%</span>
+                                        </div>
+                                        <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                                            <div style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: ${importance * 100}%; transition: width 0.3s;"></div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Clustering Section
+    if (insights.employee_clusters && !insights.employee_clusters.error) {
+        const clusters = insights.employee_clusters;
+        html += `
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                    <i class="fas fa-object-group"></i> تصنيف الموظفين (${clusters.num_clusters} مجموعات)
+                </div>
+                <div style="padding: 30px;">
+                    <div style="text-align: center; margin-bottom: 25px;">
+                        <span style="background: #667eea; color: white; padding: 10px 20px; border-radius: 20px; font-weight: 600;">
+                            جودة التصنيف: ${(clusters.silhouette_score * 100).toFixed(1)}%
+                        </span>
+                    </div>
+                    
+                    <div style="display: grid; gap: 15px;">
+                        ${clusters.clusters?.map((cluster, idx) => {
+                            const colors = ['#667eea', '#f5576c', '#4facfe', '#fee140', '#fa709a'];
+                            const color = colors[idx % colors.length];
+                            return `
+                                <div style="background: linear-gradient(135deg, ${color}15, ${color}05); border-right: 4px solid ${color}; padding: 20px; border-radius: 10px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <h4 style="margin: 0 0 10px 0; color: ${color};">المجموعة ${cluster.cluster_id}</h4>
+                                            <p style="margin: 0; font-size: 14px; color: #666;">${cluster.description}</p>
+                                        </div>
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 32px; font-weight: bold; color: ${color};">${cluster.size}</div>
+                                            <div style="font-size: 12px; color: #666;">موظف</div>
+                                        </div>
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 32px; font-weight: bold; color: ${color};">${cluster.avg_rating?.toFixed(2)}</div>
+                                            <div style="font-size: 12px; color: #666;">متوسط التقييم</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Patterns Section
+    if (insights.patterns && insights.patterns.length > 0) {
+        html += `
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                    <i class="fas fa-search"></i> الأنماط المكتشفة
+                </div>
+                <div style="padding: 30px;">
+                    ${insights.patterns.map(pattern => `
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-right: 4px solid #4facfe;">
+                            <h4 style="margin: 0 0 10px 0; color: #1B4D3E;">
+                                <i class="fas fa-lightbulb" style="color: #4facfe;"></i> ${pattern.title}
+                            </h4>
+                            <p style="margin: 0; color: #666;">${pattern.description}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Recommendations Section
+    if (insights.recommendations && insights.recommendations.length > 0) {
+        html += `
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+                    <i class="fas fa-lightbulb"></i> التوصيات الذكية
+                </div>
+                <div style="padding: 30px;">
+                    ${insights.recommendations.map(rec => {
+                        const priorityColors = {
+                            'عالية': '#f5576c',
+                            'متوسطة': '#fee140',
+                            'منخفضة': '#4facfe'
+                        };
+                        const color = priorityColors[rec.priority] || '#4facfe';
+                        
+                        return `
+                            <div style="background: white; border: 2px solid ${color}; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                                    <h4 style="margin: 0; color: #1B4D3E; flex: 1;">${rec.title}</h4>
+                                    <span style="background: ${color}; color: white; padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap;">
+                                        ${rec.priority}
+                                    </span>
+                                </div>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                    <strong style="color: #667eea;">الإجراء المقترح:</strong>
+                                    <p style="margin: 10px 0 0 0;">${rec.action}</p>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-chart-line" style="color: #00855D;"></i>
+                                    <span style="color: #666; font-size: 14px;">
+                                        <strong>التأثير المتوقع:</strong> ${rec.expected_impact}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Statistical Analysis
+    if (insights.statistical_analysis && insights.statistical_analysis.overall) {
+        const stats = insights.statistical_analysis.overall;
+        html += `
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white;">
+                    <i class="fas fa-chart-bar"></i> التحليل الإحصائي
+                </div>
+                <div style="padding: 30px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;">${stats.mean?.toFixed(2)}</div>
+                            <div style="color: #666; font-size: 13px;">المتوسط</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;">${stats.median?.toFixed(2)}</div>
+                            <div style="color: #666; font-size: 13px;">الوسيط</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #667eea;">${stats.std?.toFixed(2)}</div>
+                            <div style="color: #666; font-size: 13px;">الانحراف المعياري</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #00855D;">${stats.max?.toFixed(2)}</div>
+                            <div style="color: #666; font-size: 13px;">أعلى قيمة</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 24px; font-weight: bold; color: #f5576c;">${stats.min?.toFixed(2)}</div>
+                            <div style="color: #666; font-size: 13px;">أقل قيمة</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #e7f5ff; padding: 15px; border-radius: 8px; border-right: 4px solid #4facfe;">
+                        <strong>نوع التوزيع:</strong> ${insights.statistical_analysis.distribution_type || 'غير محدد'}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    html += `</div>`;
+    
+    app.innerHTML = html;
 }
 
 console.log('✓ HR Analytics script loaded');
