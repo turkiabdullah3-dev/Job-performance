@@ -962,8 +962,8 @@ def get_columns():
             
             column_info = {
                 'name': col,
-                'numeric_percentage': round((numeric_count / total_count * 100) if total_count > 0 else 0, 1),
-                'is_numeric': numeric_count > 0
+                'numeric_percentage': float(round((numeric_count / total_count * 100) if total_count > 0 else 0, 1)),
+                'is_numeric': int(numeric_count > 0)
             }
             columns_info.append(column_info)
             

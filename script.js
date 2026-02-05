@@ -51,6 +51,11 @@ function showError(message, timeout) {
 async function initSession() {
     console.log('Initializing app...');
     
+    // Restore session token if available
+    if (!sessionToken) {
+        sessionToken = localStorage.getItem('session_token');
+    }
+    
     // Check if user is logged in
     if (!sessionToken) {
         showLoginPage();
@@ -136,6 +141,7 @@ async function handleLogin(e) {
         
         if (response.ok && data.token) {
             sessionToken = data.token;
+            localStorage.setItem('session_token', sessionToken);
             buildPageHTML();
             hideLoadingScreen();
             attachEventListeners();
@@ -190,6 +196,12 @@ function buildPageHTML() {
                 <h2>رفع ملف Excel</h2>
                 <p>اضغط أو اسحب ملف Excel للبدء في التحليل</p>
                 <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" />
+            </div>
+
+            <div style="text-align:center; margin-bottom: 20px;">
+                <button id="open-columns" class="btn btn-secondary" style="display:none;">
+                    <i class="fas fa-columns"></i> اختيار الأعمدة
+                </button>
             </div>
 
             <!-- Stats Section -->
@@ -369,6 +381,8 @@ function attachEventListeners() {
             if (data.success) {
                 currentFileId = data.file_id;
                 currentSheetName = data.sheets[0] || 'Sheet1';
+                const openColumnsBtn = document.getElementById('open-columns');
+                if (openColumnsBtn) openColumnsBtn.style.display = 'inline-flex';
                 hideLoadingScreen();
                 // جلب الأعمدة وعرض نافذة الاختيار
                 showColumnSelectionModal(currentSheetName);
@@ -382,6 +396,18 @@ function attachEventListeners() {
         }
     });
     
+    // Open columns button
+    const openColumnsBtn = document.getElementById('open-columns');
+    if (openColumnsBtn) {
+        openColumnsBtn.addEventListener('click', () => {
+            if (!currentFileId) {
+                showError('يرجى رفع ملف أولاً');
+                return;
+            }
+            showColumnSelectionModal(currentSheetName);
+        });
+    }
+
     // Clear button
     const clearBtn = document.getElementById('clear-data');
     if (clearBtn) {
@@ -989,11 +1015,25 @@ async function showColumnSelectionModal(sheetName) {
         
         hideLoadingScreen();
         
-        if (!response.ok) {
-            throw new Error('Failed to get columns');
+        const rawText = await response.text();
+        let data = {};
+        if (rawText) {
+            try {
+                data = JSON.parse(rawText);
+            } catch (parseError) {
+                throw new Error(`رد غير صالح من الخادم (HTTP ${response.status})`);
+            }
         }
         
-        const data = await response.json();
+        if (!response.ok) {
+            if (response.status === 401) {
+                localStorage.removeItem('session_token');
+                sessionToken = null;
+                showLoginPage();
+                throw new Error('الجلسة انتهت، الرجاء تسجيل الدخول مرة أخرى');
+            }
+            throw new Error(data.error || `Failed to get columns (HTTP ${response.status})`);
+        }
         // Extract column names from column objects {name, numeric_percentage, is_numeric}
         const columnObjects = data.columns || [];
         availableColumns = columnObjects.map(c => c.name || c);
@@ -1173,11 +1213,26 @@ async function runCustomAnalysis(deptCol, ratingCols) {
             })
         });
         
-        if (!response.ok) {
-            throw new Error('Analysis failed');
+        const rawText = await response.text();
+        let data = {};
+        if (rawText) {
+            try {
+                data = JSON.parse(rawText);
+            } catch (parseError) {
+                throw new Error(`رد غير صالح من الخادم (HTTP ${response.status})`);
+            }
         }
         
-        const data = await response.json();
+        if (!response.ok) {
+            if (response.status === 401) {
+                localStorage.removeItem('session_token');
+                sessionToken = null;
+                showLoginPage();
+                throw new Error('الجلسة انتهت، الرجاء تسجيل الدخول مرة أخرى');
+            }
+            throw new Error(data.error || `Analysis failed (HTTP ${response.status})`);
+        }
+        
         renderDashboard(data);
         
     } catch (error) {
