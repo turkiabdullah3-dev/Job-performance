@@ -15,7 +15,8 @@ import bcrypt
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, static_folder='.')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, static_folder=BASE_DIR)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 # CORS Configuration for Production
@@ -758,12 +759,13 @@ def check_auth(request):
 
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/<path:path>')
 def serve_static(path):
-    if os.path.exists(path):
-        return send_from_directory('.', path)
+    file_path = os.path.join(BASE_DIR, path)
+    if os.path.exists(file_path):
+        return send_from_directory(BASE_DIR, path)
     return jsonify({'error': 'Not found'}), 404
 
 @app.route('/init-session', methods=['GET'])

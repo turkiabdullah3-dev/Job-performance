@@ -55,17 +55,27 @@ async function initSession() {
 }
 
 // DOM ready - attach all event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM ready, initializing...');
+function initApp() {
+    console.log('Initializing app...');
     buildPageHTML();
     initSession();
     attachEventListeners();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 
 // Build the main page structure
 function buildPageHTML() {
-    const app = document.getElementById('app');
-    if (!app) return;
+    let app = document.getElementById('app');
+    if (!app) {
+        app = document.createElement('div');
+        app.id = 'app';
+        document.body.appendChild(app);
+    }
     
     app.innerHTML = `
         <!-- Loading Screen -->
