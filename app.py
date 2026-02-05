@@ -680,6 +680,7 @@ def login():
         logger.info(f'✓ User "{username}" logged in from IP: {client_ip}')
         return jsonify({
             'success': True,
+            'token': session_token,
             'session_token': session_token,
             'message': f'Welcome {username}'
         }), 200
