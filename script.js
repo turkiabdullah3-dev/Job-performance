@@ -50,6 +50,13 @@ function showError(message, timeout) {
 // Initialize session
 async function initSession() {
     console.log('Initializing app...');
+    
+    // Check if user is logged in
+    if (!sessionToken) {
+        showLoginPage();
+        return;
+    }
+    
     hideLoadingScreen();
     attachEventListeners();
 }
@@ -59,13 +66,87 @@ function initApp() {
     console.log('Initializing app...');
     buildPageHTML();
     initSession();
-    attachEventListeners();
 }
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
 } else {
     initApp();
+}
+
+// Show login page
+function showLoginPage() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    
+    app.innerHTML = `
+        <div id="loadingScreen"></div>
+        <div id="error-banner"></div>
+        
+        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #00855D 0%, #006B4A 50%, #1B4D3E 100%);">
+            <div style="background: white; border-radius: 20px; padding: 50px; max-width: 450px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                <div style="text-align: center; margin-bottom: 40px;">
+                    <i class="fas fa-user-shield" style="font-size: 60px; color: #00855D; margin-bottom: 20px;"></i>
+                    <h1 style="color: #1B4D3E; font-size: 28px; margin-bottom: 10px;">تسجيل الدخول</h1>
+                    <p style="color: #666; font-size: 14px;">نظام تحليل الأداء الوظيفي</p>
+                </div>
+                
+                <form id="loginForm" style="display: flex; flex-direction: column; gap: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: #1B4D3E; font-weight: 600;">اسم المستخدم:</label>
+                        <input type="text" id="username" required style="width: 100%; padding: 14px; border: 2px solid #D4E5DD; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 15px;" />
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: #1B4D3E; font-weight: 600;">كلمة المرور:</label>
+                        <input type="password" id="password" required style="width: 100%; padding: 14px; border: 2px solid #D4E5DD; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 15px;" />
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 16px; background: #00855D; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px;">
+                        <i class="fas fa-sign-in-alt"></i> دخول
+                    </button>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    const form = document.getElementById('loginForm');
+    if (form) {
+        form.addEventListener('submit', handleLogin);
+    }
+}
+
+// Handle login
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    
+    showLoadingScreen('جاري تسجيل الدخول...', '');
+    
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.token) {
+            sessionToken = data.token;
+            buildPageHTML();
+            hideLoadingScreen();
+            attachEventListeners();
+        } else {
+            hideLoadingScreen();
+            showError(data.error || 'خطأ في تسجيل الدخول');
+        }
+    } catch (error) {
+        hideLoadingScreen();
+        showError('خطأ في الاتصال بالخادم');
+    }
 }
 
 // Build the main page structure
@@ -272,9 +353,6 @@ function attachEventListeners() {
             const data = await response.json();
             
             if (data.success) {
-                if (data.session_token) {
-                    sessionToken = data.session_token;
-                }
                 currentFileId = data.file_id;
                 currentSheetName = data.sheets[0] || 'Sheet1';
                 hideLoadingScreen();
