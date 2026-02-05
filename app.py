@@ -1009,9 +1009,16 @@ def analyze_custom():
         rating_cols = [rating_cols]
     
     try:
-        excel = pd.ExcelFile(io.BytesIO(files[file_id]))
-        df = pd.read_excel(excel, sheet_name=sheet)
+        df, _ = load_dataframe(files[file_id], sheet)
         df = df.dropna(how='all')
+        
+        # Validate columns exist
+        if dept_col not in df.columns:
+            return jsonify({'error': f'Column "{dept_col}" not found'}), 400
+        
+        for rating_col in rating_cols:
+            if rating_col not in df.columns:
+                return jsonify({'error': f'Column "{rating_col}" not found'}), 400
         
         all_ratings = []
         column_results = {}
@@ -1084,7 +1091,7 @@ def analyze_custom():
         return jsonify(result), 200
         
     except Exception as e:
-        logger.error(f"Custom analysis error: {e}")
+        logger.error(f"Custom analysis error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 400
 
 
