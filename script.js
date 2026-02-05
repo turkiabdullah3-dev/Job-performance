@@ -340,17 +340,23 @@ function attachEventListeners() {
         formData.append('file', file);
         
         try {
-        const response = await fetch(`${API_BASE}/upload`, { 
+            if (!sessionToken) {
+                showError('يرجى تسجيل الدخول أولاً');
+                hideLoadingScreen();
+                return;
+            }
+            
+            const response = await fetch(`${API_BASE}/upload`, { 
                 method: 'POST', 
                 body: formData, 
                 headers: { 'X-Session-Token': sessionToken } 
             });
             
-            if (!response.ok) {
-                throw new Error('Upload failed');
-            }
-            
             const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Upload failed');
+            }
             
             if (data.success) {
                 currentFileId = data.file_id;
