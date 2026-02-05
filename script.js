@@ -352,10 +352,18 @@ function attachEventListeners() {
                 headers: { 'X-Session-Token': sessionToken } 
             });
             
-            const data = await response.json();
+            const rawText = await response.text();
+            let data = {};
+            if (rawText) {
+                try {
+                    data = JSON.parse(rawText);
+                } catch (parseError) {
+                    throw new Error(`رد غير صالح من الخادم (HTTP ${response.status})`);
+                }
+            }
             
             if (!response.ok) {
-                throw new Error(data.error || 'Upload failed');
+                throw new Error(data.error || `Upload failed (HTTP ${response.status})`);
             }
             
             if (data.success) {
