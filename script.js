@@ -54,10 +54,35 @@ async function initSession() {
     // Restore session token if available
     if (!sessionToken) {
         sessionToken = localStorage.getItem('session_token');
+        console.log('📥 Restored sessionToken from localStorage:', sessionToken);
     }
     
     // Check if user is logged in
     if (!sessionToken) {
+        console.log('❌ No sessionToken found, showing login page');
+        showLoginPage();
+        return;
+    }
+    
+    // Verify token with backend
+    try {
+        const response = await fetch(`${API_BASE}/auth-check`, {
+            method: 'GET',
+            headers: { 'X-Session-Token': sessionToken }
+        });
+        
+        const data = await response.json();
+        console.log('🔐 auth-check response:', data);
+        
+        if (!response.ok || !data.authenticated) {
+            console.log('❌ Token is invalid/expired, clearing and showing login');
+            sessionToken = null;
+            localStorage.removeItem('session_token');
+            showLoginPage();
+            return;
+        }
+    } catch (error) {
+        console.error('❌ auth-check failed:', error);
         showLoginPage();
         return;
     }
@@ -139,9 +164,12 @@ async function handleLogin(e) {
         
         const data = await response.json();
         
+        console.log('🔐 Login response:', data);
+        
         if (response.ok && data.token) {
             sessionToken = data.token;
             localStorage.setItem('session_token', sessionToken);
+            console.log('💾 Saved sessionToken to localStorage:', sessionToken);
             buildPageHTML();
             hideLoadingScreen();
             attachEventListeners();
@@ -151,6 +179,7 @@ async function handleLogin(e) {
         }
     } catch (error) {
         hideLoadingScreen();
+        console.error('Login error:', error);
         showError('خطأ في الاتصال بالخادم');
     }
 }
@@ -360,6 +389,9 @@ function attachEventListeners() {
                 hideLoadingScreen();
                 return;
             }
+            
+            console.log('📤 Upload: sessionToken =', sessionToken);
+            console.log('📤 Upload: API_BASE =', API_BASE);
             
             const response = await fetch(`${API_BASE}/upload`, { 
                 method: 'POST', 
