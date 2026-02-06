@@ -1,102 +1,90 @@
-# HR Analytics System - Deployment Guide
-# Domain: analysis.turki20.sa
+# 📊 نظام تحليل الموارد البشرية - HR Analytics
 
-## Quick Start (Local Development)
+نظام متقدم لتحليل بيانات الموارد البشرية باستخدام الذكاء الاصطناعي والتعلم الآلي.
 
-### 1. Run Locally
+## 🚀 الميزات الرئيسية
+
+- ✅ **تسجيل دخول آمن** - مصادقة قوية مع bcrypt
+- ✅ **رفع ملفات Excel** - معالجة سريعة للبيانات الضخمة
+- ✅ **تحليل ذكي بـ AI** - توقعات وتصنيفات باستخدام scikit-learn
+- ✅ **رسوم بيانية تفاعلية** - عرض النتائج بشكل مرئي
+- ✅ **توصيات ذكية** - اقتراحات قابلة للتنفيذ
+
+## 🛠️ التشغيل المحلي
+
 ```bash
-cd /Users/turki/Desktop/hr
+# 1. تثبيت المتطلبات
+pip3 install -r requirements.txt
+
+# 2. التشغيل
 python3 app.py
+
+# 3. افتح المتصفح
+http://127.0.0.1:8002
 ```
-Then open: http://127.0.0.1:8080
+
+## 📝 بيانات تسجيل الدخول
+
+```
+اسم المستخدم: admin
+كلمة المرور: admin123456
+```
+
+## 🧠 نماذج الذكاء الاصطناعي المستخدمة
+
+| النموذج | الوصف |
+|---------|-------|
+| **Gradient Boosting** | التنبؤ بالأداء المستقبلي |
+| **K-Means Clustering** | تصنيف الموظفين |
+| **Statistical Analysis** | التحليل الإحصائي المتقدم |
+| **Anomaly Detection** | كشف الحالات الشاذة |
+
+## 📁 هيكل الملفات
+
+```
+hr/
+├── app.py           # الـ backend الرئيسي
+├── script.js        # الـ frontend
+├── index.html       # صفحة المرة الأولى
+├── styles.css       # التصميم
+└── requirements.txt # المكتبات
+```
+
+## 🔐 الأمان
+
+- كلمات مرور مشفرة بـ bcrypt
+- جلسات آمنة مع timeout 2 ساعة
+- التحقق من IP والتوكن
+- حد أقصى لعدد محاولات تسجيل الدخول
+
+## 📊 API Endpoints
+
+| الـ Endpoint | الوصف |
+|------------|-------|
+| `POST /login` | تسجيل الدخول |
+| `POST /upload` | رفع الملف |
+| `POST /ai-analyze` | التحليل الذكي |
+| `POST /analyze-custom` | تحليل مخصص |
+| `GET /auth-check` | التحقق من الجلسة |
+
+## 🔧 التطوير
+
+```bash
+# تحديث المكتبات
+pip3 install -r requirements.txt
+
+# مسح الـ cache
+find . -type d -name __pycache__ -exec rm -r {} +
+
+# اختبار الكود
+python3 -m py_compile app.py
+node --check script.js
+```
 
 ---
 
-## Production Deployment (VPS/Server)
-
-### Prerequisites
-- Ubuntu 20.04+ or similar Linux distribution
-- Python 3.8+
-- Nginx web server
-- Domain pointing to server IP
-- SSH access with sudo privileges
-
-### Step 1: Upload Files to Server
-
-**Option A: Using SCP**
-```bash
-scp -r /Users/turki/Desktop/hr/* user@your-server-ip:/tmp/
-```
-
-**Option B: Using Git**
-```bash
-git clone your-repo-url
-cd hr-analytics
-```
-
-### Step 2: Run Deployment Script
-
-```bash
-# Make executable
-chmod +x deploy.sh
-
-# Run full deployment
-sudo ./deploy.sh deploy
-```
-
-This will:
-- Create necessary directories
-- Install Python dependencies
-- Copy application files
-- Create systemd service
-- Configure firewall
-- Start services
-
-### Step 3: Setup SSL Certificate
-
-```bash
-sudo ./deploy.sh ssl
-```
-
-This uses Let's Encrypt to get free SSL certificate.
-
-### Step 4: Verify
-
-Open: https://analysis.turki20.sa
-
----
-
-## Manual Deployment Steps
-
-If you prefer manual setup:
-
-### 1. Install Dependencies
-```bash
-sudo apt update
-sudo apt install python3-pip nginx software-properties-common certbot python3-certbot-nginx
-pip3 install flask flask-cors pandas numpy gunicorn
-```
-
-### 2. Create Directory
-```bash
-sudo mkdir -p /var/www/hr-analytics
-sudo mkdir -p /var/log/hr-analytics
-sudo mkdir -p /var/www/letsencrypt
-```
-
-### 3. Copy Files
-```bash
-sudo cp -r /Users/turki/Desktop/hr/* /var/www/hr-analytics/
-sudo chmod -R 755 /var/www/hr-analytics
-```
-
-### 4. Configure Nginx
-```bash
-sudo cp nginx.conf /etc/nginx/sites-available/analysis.turki20.sa
-sudo ln -s /etc/nginx/sites-available/analysis.turki20.sa /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
+**تم التطوير بواسطة:** turkiabdullah3
+**آخر تحديث:** 6 فبراير 2026
 
 ### 5. Create Systemd Service
 ```bash
