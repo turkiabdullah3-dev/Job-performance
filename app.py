@@ -686,8 +686,6 @@ def login():
             }
         
         logger.info(f'✓ User "{username}" logged in from IP: {client_ip}')
-        logger.info(f'📌 Created session: {session_token}')
-        logger.info(f'📌 Total sessions now: {len(sessions)}')
         return jsonify({
             'success': True,
             'token': session_token,
@@ -726,20 +724,16 @@ def auth_check():
     """التحقق من حالة المستخدم الحالي"""
     try:
         token = request.headers.get('X-Session-Token')
-        logger.info(f"🔍 auth-check: token={token}, sessions_count={len(sessions)}")
         
         with lock:
             if not token or token not in sessions:
-                logger.error(f"❌ auth-check: Token not found: {token}")
                 return jsonify({'authenticated': False}), 401
             
             session_data = sessions[token]
             if session_data['expires'] < datetime.now():
                 del sessions[token]
-                logger.error(f"❌ auth-check: Session expired: {token}")
                 return jsonify({'authenticated': False}), 401
             
-            logger.info(f"✅ auth-check: User authenticated: {session_data.get('username')}")
             return jsonify({
                 'authenticated': True,
                 'username': session_data['username'],
@@ -757,22 +751,17 @@ def check_auth(request):
     """Helper function to check authentication"""
     token = request.headers.get('X-Session-Token')
     
-    logger.info(f"🔍 check_auth: token={token}, all_tokens={list(sessions.keys())[:3]}")
-    
     with lock:
         if token not in sessions:
-            logger.error(f"❌ Token not in sessions: {token}")
             return None, 'Invalid session', 401
         
         session_data = sessions[token]
         if session_data['expires'] < datetime.now():
             del sessions[token]
-            logger.error(f"❌ Session expired: {token}")
             return None, 'Session expired', 401
         
         # Update last activity time
         session_data['last_activity'] = datetime.now()
-        logger.info(f"✅ Auth check passed for user: {session_data.get('username', 'unknown')}")
         
         return session_data, None, None
 
